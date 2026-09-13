@@ -1,0 +1,2 @@
+# Only one Python dependency; ffmpeg/ffprobe must be installed separately.
+yt-dlp>=2024.1.0
