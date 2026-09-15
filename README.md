@@ -95,5 +95,7 @@ See `james-clicker/photos/README.md` for the ways to load photos.
 
 Players enter a name before their first click. Scores travel as short `JC1-`
 codes: a player copies their code, sends it over, and whoever keeps the board
-pastes it in. Each browser stores the board it has been given, so the page needs
-no backend and can be shared with anyone. Scores are self-reported.
+pastes it in. The owner can then publish the board: the page rewrites the
+`shared-board` JSON block in its own source and saves that as a new version, so
+every viewer sees those scores. Viewers without write access just read the baked
+-in block. No backend, shareable with anyone, and scores are self-reported.
