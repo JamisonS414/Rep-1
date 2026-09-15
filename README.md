@@ -91,4 +91,8 @@ When in doubt, ask the streamer first. Most say yes.
 
 An idle clicker game about one guy, in `james-clicker/`. Open
 `james-clicker/index.html` in a browser, add a few photos of James, and click him.
-See `james-clicker/photos/README.md` for the two ways to load photos.
+See `james-clicker/photos/README.md` for the ways to load photos.
+
+Players enter a name before their first click, and scores sync to a shared
+leaderboard when the page runs as a published Artifact with the `db` capability.
+Opened any other way it still plays fine — the board just shows your own score.

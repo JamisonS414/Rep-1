@@ -38,7 +38,8 @@
       --yellow:#FFD24D;
       --line:rgba(241,235,221,.16);
       --line-hard:rgba(241,235,221,.45);
-      --shade:rgba(241,235,221,.05)      --toast-bg:#272A52;
+      --shade:rgba(241,235,221,.05);
+      --toast-bg:#272A52;
       --toast-fg:#F7F3E9;
     }
   }
@@ -54,7 +55,8 @@
     --yellow:#FFD24D;
     --line:rgba(241,235,221,.16);
     --line-hard:rgba(241,235,221,.45);
-    --shade:rgba(241,235,221,.05)    --toast-bg:#272A52;
+    --shade:rgba(241,235,221,.05);
+    --toast-bg:#272A52;
     --toast-fg:#F7F3E9;
   }
 
@@ -296,6 +298,57 @@
     background:var(--yellow);color:#4a3600;font-family:"Space Mono",monospace;font-weight:700;
     font-size:11px;letter-spacing:.1em;text-transform:uppercase;
   }
+  /* ---- name gate ---- */
+  .gate{
+    position:fixed;inset:0;z-index:90;display:grid;place-items:center;padding:24px;
+    background:color-mix(in srgb, var(--paper) 86%, transparent);backdrop-filter:blur(7px);
+  }
+  .gate-card{
+    width:min(420px,100%);background:var(--card);border:3px solid var(--ink);border-radius:3px;
+    box-shadow:8px 8px 0 var(--pink);padding:26px 24px;
+  }
+  .gate-card h2{
+    font-family:"Archivo Black",sans-serif;font-weight:400;text-transform:uppercase;
+    font-size:26px;line-height:1;margin:4px 0 10px;letter-spacing:-.02em;
+  }
+  .gate-card p{margin:0 0 18px;font-size:14px;color:var(--ink-soft);line-height:1.5;max-width:34ch}
+  .gate form{display:flex;flex-wrap:wrap;gap:8px}
+  .gate input{
+    flex:1 1 180px;min-width:0;padding:11px 12px;border:2px solid var(--ink);border-radius:2px;
+    background:var(--paper);color:var(--ink);font-size:16px;font-family:inherit;
+  }
+  .gate input::placeholder{color:var(--ink-soft);opacity:.8}
+  .gate button{
+    padding:11px 18px;border:2px solid var(--blue);background:var(--blue);color:#fff;border-radius:2px;
+    font-family:"Space Mono",monospace;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  }
+  .gate button:hover{background:var(--blue-deep);border-color:var(--blue-deep)}
+  .gate .err{margin:10px 0 0;color:var(--pink);font-family:"Space Mono",monospace;font-size:11px}
+
+  /* ---- leaderboard ---- */
+  .panel-head .link{
+    margin-left:auto;font-family:"Space Mono",monospace;font-size:9.5px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--ink-soft);text-decoration:underline;
+    text-decoration-style:dotted;text-underline-offset:3px;
+  }
+  .panel-head .link:hover{color:var(--pink)}
+  .board{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px}
+  .board li{
+    display:grid;grid-template-columns:22px minmax(0,1fr) auto;align-items:baseline;gap:8px;
+    padding:5px 0;border-bottom:1px dotted var(--line);
+  }
+  .board .rank{font-family:"Space Mono",monospace;font-size:11px;color:var(--ink-soft);
+    font-variant-numeric:tabular-nums}
+  .board .who{font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .board .score{font-family:"Space Mono",monospace;font-size:12px;font-weight:700;
+    font-variant-numeric:tabular-nums;color:var(--blue)}
+  .board li.me .who{font-weight:700}
+  .board li.me .rank{color:var(--pink)}
+  .board li.me .score{color:var(--pink)}
+  .board li.top .score{font-size:13.5px}
+  .board-note{margin:9px 0 0;font-family:"Space Mono",monospace;font-size:10px;line-height:1.5;
+    color:var(--ink-soft)}
+
   footer{margin-top:34px;padding-top:12px;border-top:1.5px solid var(--line);
     font-family:"Space Mono",monospace;font-size:10.5px;letter-spacing:.06em;color:var(--ink-soft);
     display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:space-between}
@@ -367,6 +420,11 @@
 
     <section class="ledger">
       <div>
+        <div class="panel-head"><span>Leaderboard</span><button type="button" class="link" id="renameBtn">Change name</button></div>
+        <ol class="board" id="board"></ol>
+        <p class="board-note" id="boardNote"></p>
+      </div>
+      <div>
         <div class="panel-head"><span>Ledger</span></div>
         <dl class="stats">
           <div><dt>All-time Jameses</dt><dd id="sTotal">0</dd></div>
@@ -388,6 +446,19 @@
     <span>Saves to this browser every 10 seconds.</span>
     <span>Built for James. Sorry, James.</span>
   </footer>
+</div>
+
+<div class="gate" id="gate" hidden>
+  <div class="gate-card">
+    <span class="kicker">before you click</span>
+    <h2 id="gateTitle">Who's playing?</h2>
+    <p id="gateBody">Your name goes on the leaderboard, so everyone can see who has made the most James.</p>
+    <form id="gateForm" novalidate>
+      <input id="nameInput" type="text" maxlength="20" placeholder="Your name" autocomplete="nickname" spellcheck="false">
+      <button type="submit" id="gateGo">Start clicking</button>
+    </form>
+    <p class="err" id="gateErr" hidden></p>
+  </div>
 </div>
 
 <div class="toasts" id="toasts"></div>
@@ -449,6 +520,7 @@
 
   /* ---------------- state ---------------- */
   var SAVE_KEY = "jamesclicker.save.v1", PHOTO_KEY = "jamesclicker.photos.v1";
+  var PLAYER_KEY = "jamesclicker.player.v1";
 
   /* Photos shipped with the page, as "data:image/jpeg;base64,..." strings. These are
      the ones every viewer sees before they add their own; the first is the portrait
@@ -460,9 +532,176 @@
   var mult = {click:1, global:1, muscle:0, goldenFreq:1, build:{}};
   var frenzy = {mult:1, until:0}, clickFrenzy = {mult:1, until:0};
   var prefs = {ink:true, sound:true};
+  var player = null;                       // {id, name} for this browser
+  var scores = null, myRow = null, unsub = null;   // shared leaderboard
+  var writing = false, lastWriteAt = 0, lastWritten = -1, localShown = null;
   var $ = function(id){return document.getElementById(id)};
 
   function store(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v); return true; }catch(e){ return false; } }
+
+  /* ---------------- player ---------------- */
+  function newId(){
+    try{
+      var a = new Uint8Array(8);
+      (window.crypto || window.msCrypto).getRandomValues(a);
+      return Array.prototype.map.call(a, function(b){ return ("0"+b.toString(16)).slice(-2) }).join("");
+    }catch(e){
+      return (Date.now().toString(36) + Math.random().toString(36).slice(2,10));
+    }
+  }
+  // names come from other players, so they are text and never markup
+  function cleanName(n){
+    return (typeof n === "string" ? n : "")
+      .replace(/[\u0000-\u001F\u007F-\u009F]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0,20);
+  }
+  function loadPlayer(){
+    var raw = store(PLAYER_KEY);
+    if(raw){ try{ var p = JSON.parse(raw); if(p && p.id && p.name){ player = p; } }catch(e){} }
+    return !!player;
+  }
+  function savePlayer(){ store(PLAYER_KEY, JSON.stringify(player)); }
+
+  function openGate(rename){
+    var gate = $("gate");
+    $("gateTitle").textContent = rename ? "Change your name" : "Who's playing?";
+    $("gateBody").textContent = rename
+      ? "This is the name on the leaderboard. Changing it renames your existing score."
+      : "Your name goes on the leaderboard, so everyone can see who has made the most James.";
+    $("gateGo").textContent = rename ? "Save name" : "Start clicking";
+    $("nameInput").value = rename && player ? player.name : "";
+    $("gateErr").hidden = true;
+    gate.hidden = false;
+    gate.dataset.rename = rename ? "1" : "";
+    setTimeout(function(){ try{ $("nameInput").focus() }catch(e){} }, 30);
+  }
+  function submitGate(e){
+    if(e) e.preventDefault();
+    var name = cleanName($("nameInput").value);
+    if(!name){
+      $("gateErr").textContent = "Type a name first \u2014 anything you want to be called.";
+      $("gateErr").hidden = false;
+      $("nameInput").focus();
+      return;
+    }
+    var rename = !!$("gate").dataset.rename;
+    if(rename && player){ player.name = name; }
+    else { player = {id: newId(), name: name}; }
+    savePlayer();
+    $("gate").hidden = true;
+    $("renameBtn").hidden = false;
+    renderBoard(null);
+    if(rename) pushScore(true); else connectScores();
+    toast(rename ? "Name changed" : "Welcome, " + name, rename
+      ? "The leaderboard now shows " + name + "."
+      : "Every James you make counts toward the leaderboard.");
+  }
+
+  /* ---------------- shared leaderboard ---------------- */
+  function boardNote(msg){
+    var el = $("boardNote");
+    el.textContent = msg || "";
+    el.hidden = !msg;
+  }
+  function renderBoard(rows){
+    var ol = $("board");
+    ol.innerHTML = "";
+    if(!rows){
+      // no shared list yet: show this player alone so the panel is never blank
+      rows = player ? [{id:player.id, name:player.name, total:s.total}] : [];
+    }
+    if(!rows.length){ boardNote("No scores yet. Be the first."); return; }
+    rows.forEach(function(r, i){
+      var li = document.createElement("li");
+      li.className = "row" + (player && r.id === player.id ? " me" : "") + (i===0 ? " top" : "");
+      var rank = document.createElement("span");
+      rank.className = "rank"; rank.textContent = (i+1);
+      var who = document.createElement("span");
+      who.className = "who"; who.textContent = cleanName(r.name) || "Someone";
+      var sc = document.createElement("span");
+      sc.className = "score"; sc.textContent = fmt(Number(r.total) || 0);
+      li.appendChild(rank); li.appendChild(who); li.appendChild(sc);
+      ol.appendChild(li);
+    });
+  }
+  function connectScores(){
+    if(!player || scores) return;
+    if(!(window.claude && typeof window.claude.use === "function")){
+      boardNote("Shared scores only work on the published link. This copy keeps your score to itself.");
+      renderBoard(null);
+      return;
+    }
+    boardNote("Connecting to the shared leaderboard\u2026");
+    renderBoard(null);
+    window.claude.use("db").then(function(db){
+      if(!db){
+        boardNote("Shared scores are not available here. Your score stays on this device.");
+        return;
+      }
+      scores = db.collection("scores");
+      myRow = scores.doc(player.id);
+      subscribeBoard();
+      pushScore(true);
+    }, function(){
+      boardNote("Shared scores are not available here. Your score stays on this device.");
+    });
+  }
+  function subscribeBoard(){
+    if(!scores || unsub) return;
+    try{
+      unsub = scores.orderBy("total","desc").limit(10).onSnapshot(function(snap){
+        var rows = snap.docs.map(function(d){
+          var v = d.data() || {};
+          return {id: d.id, name: v.name, total: v.total};
+        });
+        renderBoard(rows);
+        boardNote(rows.length > 1
+          ? rows.length + " players. Rank is by all-time Jameses."
+          : "Rank is by all-time Jameses. Send the link to more friends.");
+      }, function(err){
+        unsub = null;
+        boardNote(err && err.code === "revoked"
+          ? "Scores stopped syncing. Your own progress is safe."
+          : "Scores are not syncing right now. Your own progress is safe.");
+      });
+    }catch(e){
+      boardNote("Scores are not syncing right now. Your own progress is safe.");
+    }
+  }
+  // one write at a time, and only when the number actually moved
+  function pushScore(force){
+    if(!myRow || !player || writing) return;
+    var now = Date.now();
+    if(!force){
+      if(now - lastWriteAt < 20000) return;
+      if(lastWritten >= 0 && s.total < lastWritten + 1) return;
+      if(lastWritten > 0 && s.total < lastWritten * 1.005) return;
+    }
+    writing = true; lastWriteAt = now;
+    var mine = Math.floor(s.total);
+    myRow.set({
+      name: player.name,
+      total: mine,
+      jps: Math.round(jps()*10)/10,
+      clicks: s.clicks,
+      assets: owned(),
+      achievements: s.ach.length,
+      updated: new Date().toISOString()
+    }).then(function(){
+      lastWritten = mine;
+    }, function(err){
+      var code = err && err.code;
+      if(code === "revoked" || code === "not_granted" || code === "capability_disabled" || code === "capability_removed"){
+        myRow = null;
+        boardNote("Scores stopped syncing. Your own progress is safe.");
+      } else if(code === "quota_exceeded"){
+        myRow = null;
+        boardNote("The leaderboard is full, so new scores cannot be added.");
+      }
+    }).then(function(){ writing = false; });
+  }
 
   /* ---------------- numbers ---------------- */
   var SUF = ["","K","M","B","T","Qa","Qi","Sx","Sp","Oc","No","Dc","Ud"];
@@ -869,6 +1108,10 @@
       var e = document.createElement("span"); e.className="buff"; e.textContent=t; bb.appendChild(e);
     });
     renderShop();
+    if(player && !myRow){
+      var own = fmt(s.total);
+      if(own !== localShown){ localShown = own; renderBoard(null); }
+    }
   }
 
   /* ---------------- save / load ---------------- */
@@ -910,6 +1153,18 @@
     $("inkBtn").setAttribute("aria-pressed", String(prefs.ink));
     $("soundBtn").setAttribute("aria-pressed", String(prefs.sound));
 
+    $("gateForm").addEventListener("submit", submitGate);
+    $("renameBtn").addEventListener("click", function(){ openGate(true) });
+    if(loadPlayer()){
+      $("renameBtn").hidden = false;
+      renderBoard(null);
+      connectScores();
+    } else {
+      $("renameBtn").hidden = true;
+      renderBoard(null);
+      openGate(false);
+    }
+
     $("portrait").addEventListener("click", doClick);
     $("addBtn").addEventListener("click", function(e){ e.stopPropagation(); $("fileInput").click() });
     $("fileInput").addEventListener("change", function(e){ addFiles(e.target.files); e.target.value=""; });
@@ -943,6 +1198,7 @@
       Object.keys(upEls).forEach(function(id){ upEls[id].remove(); delete upEls[id] });
       document.querySelectorAll(".badge").forEach(function(d){ d.className="badge locked"; d.textContent="?" });
       recalc(); save(); render();
+      lastWritten = -1; pushScore(true);
       toast("Back to zero", "One James. No assets. Good luck.");
     });
 
@@ -960,6 +1216,7 @@
       if(now > nextGolden && !goldenEl){ spawnGolden(); }
       checkAch();
       render();
+      pushScore(false);
     }, 200);
 
     setInterval(save, 10000);
