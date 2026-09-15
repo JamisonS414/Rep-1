@@ -95,7 +95,13 @@ See `james-clicker/photos/README.md` for the ways to load photos.
 
 Players enter a name before their first click. Scores travel as short `JC1-`
 codes: a player copies their code, sends it over, and whoever keeps the board
-pastes it in. The owner can then publish the board: the page rewrites the
-`shared-board` JSON block in its own source and saves that as a new version, so
-every viewer sees those scores. Viewers without write access just read the baked
--in block. No backend, shareable with anyone, and scores are self-reported.
+pastes it in. Host events (double clicks, x7 everything, x777 clicks) travel the
+same way as `JCE1-` codes, and the same paste box takes both.
+
+A publicly shared artifact is pinned to one version — the platform refuses
+always-latest while anyone outside the organization can open it — so publishing
+a new version never reaches those viewers. Codes are therefore the delivery
+mechanism, and they work on any version of the page. The owner can still publish
+the board and the running event into the page itself, which is what a viewer
+sees on whichever version they were given. No backend, shareable with anyone,
+and scores are self-reported.

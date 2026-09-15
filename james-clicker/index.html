@@ -472,11 +472,11 @@
           <button type="button" class="mini pub" id="publishBoard" hidden>Publish board</button>
         </div>
         <div class="code-box" id="codeBox" hidden>
-          <label for="codeField">Send this to whoever keeps the board</label>
+          <label for="codeField" id="codeLabel">Send this to whoever keeps the board</label>
           <input id="codeField" readonly spellcheck="false">
         </div>
         <form class="paste" id="pasteForm" hidden>
-          <input id="pasteInput" placeholder="Paste their JC1- code" spellcheck="false" autocomplete="off">
+          <input id="pasteInput" placeholder="Paste a JC1- score or JCE1- event code" spellcheck="false" autocomplete="off">
           <button type="submit">Add</button>
         </form>
         <p class="board-note" id="boardNote"></p>
@@ -484,7 +484,7 @@
 
       <div id="hostPanel" hidden>
         <div class="panel-head"><span>Host controls</span><span>only you</span></div>
-        <p class="host-hint">Start an event for everyone playing. It reaches every open page.</p>
+        <p class="host-hint">Starts here and gives you a code. Paste that code in the group chat &mdash; anyone who pastes it into <em>Add a friend&rsquo;s</em> runs the same event for whatever time is left.</p>
         <div class="host-grid">
           <button type="button" class="mini" data-ev="double">&times;2 clicks</button>
           <button type="button" class="mini" data-ev="frenzy">&times;7 everything</button>
@@ -603,6 +603,7 @@
   /* ---------------- state ---------------- */
   var SAVE_KEY = "jamesclicker.save.v1", PHOTO_KEY = "jamesclicker.photos.v1";
   var PLAYER_KEY = "jamesclicker.player.v1", BOARD_KEY = "jamesclicker.board.v1";
+  var EVENT_KEY = "jamesclicker.event.v1";
 
   /* Photos shipped with the page, as "data:image/jpeg;base64,..." strings. These are
      the ones every viewer sees before they add their own; the first is the portrait
@@ -722,20 +723,50 @@
     if(!el) return;
     try{
       var e = JSON.parse(el.textContent || "null");
-      if(!e || !Object.prototype.hasOwnProperty.call(EVENTS, e.kind)) return;
-      if(typeof e.until !== "number" || !isFinite(e.until)) return;
-      hostEvent = {
-        kind: e.kind,
-        until: e.until,
-        by: cleanName(e.by) || "the host",
-        all: EVENTS[e.kind].all,
-        click: EVENTS[e.kind].click,
-        label: EVENTS[e.kind].label
-      };
+      setEvent(e, false);
     }catch(err){}
   }
   function liveEvent(){
     return (hostEvent && hostEvent.until > Date.now()) ? hostEvent : null;
+  }
+  // keep whichever event runs longest: the one in the page, or one pasted here
+  function setEvent(e, remember){
+    if(!e) return false;
+    if(!Object.prototype.hasOwnProperty.call(EVENTS, e.kind)) return false;
+    if(typeof e.until !== "number" || !isFinite(e.until)) return false;
+    if(e.until <= Date.now()) return false;
+    if(hostEvent && hostEvent.until >= e.until) return false;
+    hostEvent = {
+      kind: e.kind, until: e.until, by: cleanName(e.by) || "the host",
+      all: EVENTS[e.kind].all, click: EVENTS[e.kind].click, label: EVENTS[e.kind].label
+    };
+    if(remember) store(EVENT_KEY, JSON.stringify({kind:hostEvent.kind, until:hostEvent.until, by:hostEvent.by}));
+    return true;
+  }
+  function loadLocalEvent(){
+    var raw = store(EVENT_KEY);
+    if(!raw) return;
+    try{ setEvent(JSON.parse(raw), false); }catch(e){}
+  }
+  // A frenzy code carries the event to anyone, on any version of the page —
+  // the only route that works while the shared link is pinned to a version.
+  function encodeEvent(kind, mins){
+    return "JCE1-" + b64encode(JSON.stringify({
+      k: kind, u: Date.now() + mins*60000, b: player ? player.name : ""
+    }));
+  }
+  function decodeEvent(text){
+    var m = String(text||"").match(/JCE1-([A-Za-z0-9\-_]+)/);
+    if(!m) return null;
+    try{
+      var o = JSON.parse(b64decode(m[1]));
+      if(!o || !Object.prototype.hasOwnProperty.call(EVENTS, o.k)) return null;
+      var until = Number(o.u);
+      if(!isFinite(until)) return null;
+      // a code cannot hand anyone an endless frenzy
+      if(until > Date.now() + 7200000) until = Date.now() + 7200000;
+      return {kind: o.k, until: until, by: cleanName(o.b) || "the host"};
+    }catch(e){ return null; }
   }
   function eventAll(){ var e = liveEvent(); return e ? e.all : 1; }
   function eventClick(){ var e = liveEvent(); return e ? e.click : 1; }
@@ -930,22 +961,22 @@
       // someone published between our fetch and our write: start over from
       // their version so both sets of scores survive
       if(err && err.code === "conflict"){
-        boardNote("Someone else published first — merging their scores in…");
+        toast("Merging", "Someone else published first, folding their scores in.");
         return attemptPublish({});
       }
       throw err;
     }).then(function(count){
-      boardNote(count + " scores are now on the published board.");
+      toast("Board published", count + " scores saved into the page.");
       toast("Board published", "Everyone who opens the link sees these scores.");
     }, function(err){
       var code = err && err.code;
       if(code === "not_writer" || code === "not_granted"){
         btn.hidden = true;
-        boardNote("You can play, but only someone with edit access can publish the board. Send your code to whoever keeps it.");
+        toast("Not yours to publish", "Send your code to whoever keeps the board.");
       } else if(code === "conflict"){
-        boardNote("Two people published at once. Reload the page and publish again.");
+        toast("Published at once", "Reload the page, then publish again.");
       } else {
-        boardNote("Could not publish the board just now. Try again in a moment.");
+        toast("Could not publish", "Try again in a moment.");
       }
     }).then(function(){
       btn.disabled = false; btn.textContent = label;
@@ -961,7 +992,7 @@
       $("hostNote").textContent = ev.label + " is running for everyone \u2014 " +
         clock(ev.until - Date.now()) + " left.";
       $("hostNote").hidden = false;
-    } else if(!hostBusy){
+    } else {
       $("hostNote").textContent = "No event running.";
       $("hostNote").hidden = false;
     }
@@ -971,38 +1002,51 @@
     if(!artifactNs || hostBusy) return;
     var def = EVENTS[kind];
     if(!def) return;
+    var code = encodeEvent(kind, mins);
+    var ev = decodeEvent(code);
+    setEvent(ev, true);
+    renderHost(); render();
+
+    var box = $("codeBox"), field = $("codeField");
+    $("codeLabel").textContent = "Send this " + def.label + " code to everyone";
+    box.hidden = false;
+    field.value = code;
+    field.focus(); field.select();
+    $("pasteForm").hidden = true;
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(code).then(function(){
+        toast(def.label + " started", "Code copied \u2014 paste it in the group chat.");
+      }, function(){
+        toast(def.label + " started", "The code is selected \u2014 copy it and send it over.");
+      });
+    } else {
+      toast(def.label + " started", "The code is selected \u2014 copy it and send it over.");
+    }
+    // also write it into the page, for anyone who does see the latest version
     hostBusy = true;
-    $("hostNote").textContent = "Starting " + def.label + " for everyone\u2026";
-    $("hostNote").hidden = false;
-    var ev = kind === null ? null : {kind:kind, until: Date.now() + mins*60000, by: player ? player.name : ""};
-    pushEvent(ev, def.label + " is running for everyone.");
+    pushEvent(ev, def.label + " is running for " + mins + " minutes.");
   }
   function endEvent(){
     if(!artifactNs || hostBusy) return;
     hostBusy = true;
-    $("hostNote").textContent = "Ending the event\u2026";
+    hostEvent = null;
+    store(EVENT_KEY, "");
+    render();
     $("hostNote").hidden = false;
-    pushEvent(null, "Event ended for everyone.");
+    pushEvent(null, "Event ended here. Friends' codes run until they expire.");
   }
   function pushEvent(ev, okMsg){
     attemptPublish({event: ev}).catch(function(err){
       if(err && err.code === "conflict") return attemptPublish({event: ev});
       throw err;
     }).then(function(){
-      hostEvent = null;
-      if(ev){
-        var el = document.getElementById("shared-event");
-        if(el) el.textContent = JSON.stringify(ev);
-        loadEvent();
-      }
-      $("hostNote").textContent = okMsg;
-      toast(ev ? "Event started" : "Event ended", okMsg);
+      if(!ev) toast("Event ended", okMsg);
     }, function(err){
       var code = err && err.code;
       if(code === "not_writer" || code === "not_granted"){
         $("hostPanel").hidden = true;
       } else {
-        $("hostNote").textContent = "Could not publish that just now. Try again in a moment.";
+        // the code you paste in the chat is what reaches people
       }
     }).then(function(){ hostBusy = false; renderHost(); });
   }
@@ -1011,6 +1055,7 @@
     var code = encodeScore();
     if(!code) return;
     var box = $("codeBox"), field = $("codeField");
+    $("codeLabel").textContent = "Send this to whoever keeps the board";
     box.hidden = false;
     field.value = code;
     field.focus(); field.select();
@@ -1027,13 +1072,29 @@
   }
   function addPasted(e){
     if(e) e.preventDefault();
-    var entry = decodeScore($("pasteInput").value);
+    var raw = $("pasteInput").value;
+
+    var incoming = decodeEvent(raw);
+    if(incoming){
+      var took = setEvent(incoming, true);
+      $("pasteInput").value = "";
+      $("pasteForm").hidden = true;
+      renderHost(); render();
+      if(took){
+        toast(hostEvent.label + "!", "Started by " + hostEvent.by + ", " + clock(hostEvent.until - Date.now()) + " left. Go.");
+      } else {
+        toast("Nothing to run", "That event has finished, or a longer one is already going.");
+      }
+      return;
+    }
+
+    var entry = decodeScore(raw);
     if(!entry){
-      boardNote("That does not look like a score code. It starts with JC1- .");
+      toast("Not a code", "Score codes start with JC1-, event codes with JCE1-.");
       return;
     }
     if(entry.id === player.id){
-      boardNote("That is your own code — your score is already on the board.");
+      toast("That is yours", "Your own score is already on the board.");
       return;
     }
     var added = upsert(entry);
@@ -1507,6 +1568,7 @@
     $("renameBtn").addEventListener("click", function(){ openGate(true) });
     loadPublished();
     loadEvent();
+    loadLocalEvent();
     loadBoard();
     Array.prototype.forEach.call(document.querySelectorAll("[data-ev]"), function(btn){
       btn.addEventListener("click", function(){
