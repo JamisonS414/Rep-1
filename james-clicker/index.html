@@ -1,0 +1,967 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>James Clicker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Barlow:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap">
+<style>
+  /* ---- tokens: light (newsprint) ---- */
+  :root{
+    --paper:#EDE7DA;
+    --paper-2:#E4DCC9;
+    --card:#F7F3E9;
+    --ink:#151A3D;
+    --ink-soft:#585D82;
+    --blue:#2438C7;
+    --blue-deep:#182A8F;
+    --pink:#E52E7B;
+    --yellow:#F2B705;
+    --line:rgba(21,26,61,.16);
+    --line-hard:rgba(21,26,61,.5);
+    --shade:rgba(21,26,61,.06);
+    --print-paper:#F7F3E9;
+    --print-blue:#2438C7;
+    --print-pink:#FF3D8B;
+    --toast-bg:#151A3D;
+    --toast-fg:#F7F3E9;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#131427;
+      --paper-2:#1B1C33;
+      --card:#1B1C33;
+      --ink:#F1EBDD;
+      --ink-soft:#9C9CC0;
+      --blue:#7B88FF;
+      --blue-deep:#5865E8;
+      --pink:#FF6BA8;
+      --yellow:#FFD24D;
+      --line:rgba(241,235,221,.16);
+      --line-hard:rgba(241,235,221,.45);
+      --shade:rgba(241,235,221,.05)      --toast-bg:#272A52;
+      --toast-fg:#F7F3E9;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#131427;
+    --paper-2:#1B1C33;
+    --card:#1B1C33;
+    --ink:#F1EBDD;
+    --ink-soft:#9C9CC0;
+    --blue:#7B88FF;
+    --blue-deep:#5865E8;
+    --pink:#FF6BA8;
+    --yellow:#FFD24D;
+    --line:rgba(241,235,221,.16);
+    --line-hard:rgba(241,235,221,.45);
+    --shade:rgba(241,235,221,.05)    --toast-bg:#272A52;
+    --toast-fg:#F7F3E9;
+  }
+
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  img{max-width:100%}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+    font-size:15px;
+    line-height:1.45;
+    overflow-x:hidden;
+  }
+  body::before{
+    content:"";position:fixed;inset:-40px;pointer-events:none;z-index:0;opacity:.5;
+    background-image:radial-gradient(var(--line) 1px, transparent 1.2px);
+    background-size:5px 5px;
+  }
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  :focus-visible{outline:3px solid var(--pink);outline-offset:2px}
+  .mono{font-family:"Space Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+  .num{font-family:"Space Mono",ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
+
+  .frame{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:0 16px 56px}
+
+  /* ---- top bar ---- */
+  .topbar{
+    position:sticky;top:env(safe-area-inset-top,0px);z-index:40;
+    display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px 20px;
+    padding-block:14px 12px;margin-bottom:18px;
+    background:color-mix(in srgb, var(--paper) 92%, transparent);
+    backdrop-filter:blur(6px);
+    border-bottom:2px solid var(--ink);
+  }
+  .lockup{margin-right:auto}
+  .kicker{
+    display:block;font-family:"Space Mono",monospace;font-size:10px;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--ink-soft);margin-bottom:2px;
+  }
+  h1{
+    font-family:"Archivo Black","Barlow",sans-serif;font-weight:400;
+    font-size:clamp(22px,5vw,34px);line-height:.92;margin:0;letter-spacing:-.02em;
+    text-transform:uppercase;text-wrap:balance;
+  }
+  h1 .sp{color:var(--blue)}
+  h1 .sp2{color:var(--pink)}
+  .counter{text-align:right;flex:1 1 auto;min-width:150px}
+  .count{
+    font-family:"Archivo Black",monospace;font-variant-numeric:tabular-nums;
+    font-size:clamp(26px,6vw,42px);line-height:1;letter-spacing:-.02em;
+  }
+  .count small{font-family:"Space Mono",monospace;font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--ink-soft);display:block;margin-top:4px}
+  .rate{font-family:"Space Mono",monospace;font-size:12px;color:var(--ink-soft);margin-top:3px}
+  .rate b{color:var(--pink);font-weight:700}
+  .tools{display:flex;gap:6px;flex-wrap:wrap}
+  .tool{
+    font-family:"Space Mono",monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+    padding:6px 9px;border:1.5px solid var(--line-hard);border-radius:2px;color:var(--ink-soft);
+    transition:background .12s,color .12s,border-color .12s;
+  }
+  .tool:hover{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .tool[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:#fff}
+
+  /* ---- stage ---- */
+  .stage{display:grid;gap:22px;grid-template-columns:1fr}
+  @media (min-width:900px){
+    .stage{grid-template-columns:minmax(0,1fr) 330px;align-items:start}
+    .ledger{grid-column:1;grid-row:2}
+  }
+  @media (min-width:1150px){
+    .stage{grid-template-columns:230px minmax(0,1fr) 330px}
+    .ledger{grid-column:1;grid-row:1}
+    .clicker{grid-column:2}
+    .shop{grid-column:3;grid-row:1}
+  }
+
+  .panel-head{
+    display:flex;align-items:baseline;gap:8px;
+    font-family:"Space Mono",monospace;font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--ink-soft);padding-bottom:6px;border-bottom:1.5px solid var(--ink);margin-bottom:10px;
+  }
+  .panel-head span:last-child{margin-left:auto;color:var(--blue)}
+
+  /* ---- clicker ---- */
+  .clicker{display:flex;flex-direction:column;align-items:center;gap:16px}
+  .stage-note{
+    font-family:"Space Mono",monospace;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--ink-soft);text-align:center;
+  }
+  .portrait-wrap{position:relative;width:min(340px,80vw);aspect-ratio:1;display:grid;place-items:center}
+  .rays{
+    position:absolute;inset:-14%;border-radius:50%;pointer-events:none;opacity:.5;
+    background:repeating-conic-gradient(from 0deg, var(--blue) 0 5deg, transparent 5deg 26deg);
+    mask-image:radial-gradient(circle, transparent 46%, #000 52%, #000 74%, transparent 78%);
+    -webkit-mask-image:radial-gradient(circle, transparent 46%, #000 52%, #000 74%, transparent 78%);
+  }
+  @media (prefers-reduced-motion: no-preference){
+    .rays{animation:spin 42s linear infinite}
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .portrait{
+    position:relative;width:100%;height:100%;border-radius:50%;overflow:hidden;
+    background:var(--print-paper);
+    border:5px solid var(--ink);
+    box-shadow:6px 6px 0 var(--pink);
+    transition:transform .09s cubic-bezier(.2,.9,.3,1.4), box-shadow .09s;
+    touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+    display:grid;place-items:center;
+  }
+  .portrait:hover{transform:rotate(-1deg) scale(1.015)}
+  .portrait.hit{transform:scale(.93) rotate(1.5deg);box-shadow:2px 2px 0 var(--pink)}
+  .portrait.drop{box-shadow:0 0 0 8px var(--pink)}
+  .portrait img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+  .plate{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+  .plate img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+  .plate-pink{display:none}
+  .ink .plate{isolation:isolate;mix-blend-mode:multiply}
+  .ink .plate-pink{display:block;transform:translate(7px,6px) scale(1.04)}
+  .ink .plate img{filter:grayscale(1) contrast(1.22) brightness(1.12)}
+  .ink .plate::after{content:"";position:absolute;inset:0;mix-blend-mode:lighten}
+  .ink .plate-pink::after{background:var(--print-pink)}
+  .ink .plate-blue::after{background:var(--print-blue)}
+  .halftone{
+    position:absolute;inset:0;pointer-events:none;opacity:.22;mix-blend-mode:multiply;
+    background-image:radial-gradient(#000 30%, transparent 32%);background-size:4px 4px;
+  }
+  .ink .halftone{opacity:.3}
+  .empty{
+    position:absolute;inset:0;display:grid;place-content:center;gap:10px;text-align:center;padding:24px;
+    color:var(--blue-deep);
+  }
+  .empty svg{width:96px;height:96px;margin:0 auto;display:block}
+  .empty b{font-family:"Archivo Black",sans-serif;font-size:13px;letter-spacing:.14em;text-transform:uppercase;display:block}
+  .empty span{font-family:"Space Mono",monospace;font-size:10.5px;color:var(--blue-deep);opacity:.75;letter-spacing:.06em;max-width:190px}
+  .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+  .flash.on{animation:pop .22s ease-out}
+  @keyframes pop{0%{opacity:.55}100%{opacity:0}}
+
+  .power{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;text-align:center}
+  .power div{min-width:90px}
+  .power dt{font-family:"Space Mono",monospace;font-size:9.5px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--ink-soft)}
+  .power dd{margin:2px 0 0;font-family:"Archivo Black",monospace;font-size:17px;font-variant-numeric:tabular-nums}
+
+  /* ---- photo strip ---- */
+  .strip{width:min(460px,100%);border:1.5px solid var(--line-hard);border-radius:3px;padding:10px;background:var(--card)}
+  .strip-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .thumb{position:relative;width:46px;height:46px;border-radius:3px;overflow:hidden;border:2px solid var(--ink);flex:none}
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .thumb button{
+    position:absolute;top:0;right:0;width:16px;height:16px;line-height:14px;text-align:center;
+    background:var(--ink);color:var(--paper);font-size:11px;font-family:"Space Mono",monospace;
+  }
+  .add{
+    display:inline-flex;align-items:center;gap:7px;padding:9px 14px;border:2px dashed var(--blue);
+    color:var(--blue);border-radius:3px;font-family:"Space Mono",monospace;font-size:11px;
+    letter-spacing:.1em;text-transform:uppercase;font-weight:700;
+  }
+  .add:hover{background:var(--blue);color:#fff;border-style:solid}
+  .strip p{margin:8px 0 0;font-family:"Space Mono",monospace;font-size:10px;color:var(--ink-soft);line-height:1.5}
+
+  /* ---- shop ---- */
+  .shop{display:flex;flex-direction:column;gap:20px;min-width:0}
+  .list{display:flex;flex-direction:column;gap:5px}
+  .item{
+    display:grid;grid-template-columns:1fr auto;gap:2px 12px;text-align:left;width:100%;
+    padding:9px 11px;border:1.5px solid var(--line);border-left:4px solid var(--blue);
+    background:var(--card);border-radius:2px;transition:transform .1s,border-color .1s,background .1s;
+  }
+  .item:hover:not(:disabled){transform:translateX(3px);border-color:var(--ink)}
+  .item:disabled{opacity:.42;cursor:not-allowed;border-left-color:var(--line-hard)}
+  .item.locked{border-left-color:var(--line);opacity:.3}
+  .i-name{font-weight:700;font-size:14.5px;letter-spacing:-.01em}
+  .i-cost{font-family:"Space Mono",monospace;font-size:12.5px;font-weight:700;color:var(--blue);
+    font-variant-numeric:tabular-nums;white-space:nowrap;align-self:center}
+  .item:disabled .i-cost{color:var(--ink-soft)}
+  .i-desc{grid-column:1/-1;font-size:12px;color:var(--ink-soft);line-height:1.35}
+  .i-desc em{font-style:normal;color:var(--pink);font-family:"Space Mono",monospace;font-size:11px}
+  .i-own{
+    font-family:"Archivo Black",monospace;font-size:19px;color:var(--ink);opacity:.22;
+    align-self:center;font-variant-numeric:tabular-nums;grid-row:1/3;grid-column:2;
+  }
+  .item.up{border-left-color:var(--pink)}
+  .item.up .i-cost{color:var(--pink)}
+  .item.up .i-name{text-decoration:underline;text-decoration-style:dashed;text-underline-offset:3px;
+    text-decoration-color:var(--pink)}
+  .shop .none{font-family:"Space Mono",monospace;font-size:11px;color:var(--ink-soft);padding:6px 2px}
+  .shop .rest{font-family:"Space Mono",monospace;font-size:10.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--ink-soft);padding:8px 2px 0;border-top:1px dotted var(--line);margin-top:4px}
+
+  /* ---- ledger ---- */
+  .ledger{display:flex;flex-direction:column;gap:20px;min-width:0}
+  .stats{display:flex;flex-direction:column;gap:0;margin:0}
+  .stats div{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dotted var(--line)}
+  .stats dt{font-size:12.5px;color:var(--ink-soft)}
+  .stats dd{margin:0;font-family:"Space Mono",monospace;font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums}
+  .badges{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:5px}
+  .badge{
+    aspect-ratio:1;display:grid;place-content:center;text-align:center;padding:3px;
+    border:1.5px solid var(--line);border-radius:50%;font-size:19px;background:var(--card);
+  }
+  .badge.locked{opacity:.3;color:var(--ink-soft);font-family:"Space Mono",monospace;font-size:14px}
+  .badge.got{border-color:var(--pink);border-width:2px;background:color-mix(in srgb,var(--pink) 12%,var(--card))}
+
+  /* ---- floaters, toasts, golden ---- */
+  .fly{position:fixed;z-index:60;pointer-events:none;font-family:"Archivo Black",monospace;
+    font-size:15px;color:var(--pink);text-shadow:0 1px 0 var(--paper);will-change:transform,opacity}
+  .fly img{width:26px;height:26px;border-radius:50%;object-fit:cover;vertical-align:-7px;margin-right:4px;
+    border:2px solid var(--ink)}
+  @keyframes rise{to{transform:translate(var(--dx),-90px) rotate(var(--rot));opacity:0}}
+  .toasts{position:fixed;left:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:70;
+    display:flex;flex-direction:column;gap:7px;max-width:min(330px,calc(100vw - 32px))}
+  .toast{
+    background:var(--toast-bg);color:var(--toast-fg);padding:9px 13px;border-radius:2px;
+    box-shadow:4px 4px 0 var(--pink);animation:slide .3s cubic-bezier(.2,.9,.3,1.3);
+  }
+  .toast b{display:block;font-family:"Archivo Black",sans-serif;font-size:12px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--yellow)}
+  .toast span{font-size:12.5px;opacity:.9}
+  @keyframes slide{from{transform:translateX(-120%);opacity:0}}
+  #golden{
+    position:fixed;z-index:65;width:84px;height:84px;border-radius:50%;padding:0;
+    border:4px solid var(--yellow);background:var(--yellow);overflow:hidden;
+    box-shadow:0 0 0 6px rgba(242,183,5,.3),0 8px 24px rgba(0,0,0,.25);
+  }
+  #golden img{width:100%;height:100%;object-fit:cover;filter:sepia(1) saturate(2.2) hue-rotate(-12deg) contrast(1.1)}
+  #golden .mark{position:absolute;inset:0;display:grid;place-content:center;font-family:"Archivo Black",sans-serif;
+    font-size:30px;color:#6b4f00}
+  @media (prefers-reduced-motion: no-preference){
+    #golden{animation:bob 2.4s ease-in-out infinite}
+  }
+  @keyframes bob{50%{transform:scale(1.09) rotate(6deg)}}
+  .buff{
+    display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:2px;
+    background:var(--yellow);color:#4a3600;font-family:"Space Mono",monospace;font-weight:700;
+    font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  }
+  footer{margin-top:34px;padding-top:12px;border-top:1.5px solid var(--line);
+    font-family:"Space Mono",monospace;font-size:10.5px;letter-spacing:.06em;color:var(--ink-soft);
+    display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:space-between}
+</style>
+
+<div class="frame">
+  <header class="topbar">
+    <div class="lockup">
+      <span class="kicker">an idle game about one guy</span>
+      <h1><span class="sp">James</span> <span class="sp2">Clicker</span></h1>
+    </div>
+    <div class="counter">
+      <div class="count num" id="count">0<small>Jameses in circulation</small></div>
+      <div class="rate" id="rate">manufacturing <b>0</b> per second</div>
+      <div id="buffbar" style="margin-top:6px"></div>
+    </div>
+    <div class="tools">
+      <button class="tool" id="inkBtn" aria-pressed="true" title="Switch between two-ink print and the plain photo">Ink</button>
+      <button class="tool" id="soundBtn" aria-pressed="true">Sound</button>
+      <button class="tool" id="resetBtn">Reset</button>
+    </div>
+  </header>
+
+  <div class="stage">
+    <section class="clicker">
+      <div class="portrait-wrap">
+        <div class="rays" aria-hidden="true"></div>
+        <button class="portrait ink" id="portrait" aria-label="Click James to make more James">
+          <span class="empty" id="empty">
+            <svg viewBox="0 0 100 100" aria-hidden="true">
+              <circle cx="50" cy="36" r="19" fill="none" stroke="currentColor" stroke-width="4"/>
+              <path d="M14 92c4-22 18-32 36-32s32 10 36 32" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+            </svg>
+            <b>No James on file</b>
+            <span>drop photos here, or use Add photos below</span>
+          </span>
+          <span class="flash" id="flash" aria-hidden="true"></span>
+          <span class="halftone" aria-hidden="true"></span>
+        </button>
+      </div>
+
+      <p class="stage-note" id="note">Click him. That is the whole thing.</p>
+
+      <dl class="power">
+        <div><dt>Per click</dt><dd class="num" id="perClick">1</dd></div>
+        <div><dt>Per second</dt><dd class="num" id="perSec">0</dd></div>
+        <div><dt>Clicks</dt><dd class="num" id="clicks">0</dd></div>
+      </dl>
+
+      <div class="strip" id="strip">
+        <div class="strip-row" id="thumbs">
+          <button class="add" id="addBtn">+ Add photos of James</button>
+        </div>
+        <p id="stripNote">Photos stay in this browser — they are never uploaded anywhere.</p>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" multiple hidden>
+    </section>
+
+    <aside class="shop">
+      <div>
+        <div class="panel-head"><span>Upgrades</span><span id="upCount">0</span></div>
+        <div class="list" id="upgrades"></div>
+      </div>
+      <div>
+        <div class="panel-head"><span>Assets</span><span id="bCount">0</span></div>
+        <div class="list" id="buildings"></div>
+      </div>
+    </aside>
+
+    <section class="ledger">
+      <div>
+        <div class="panel-head"><span>Ledger</span></div>
+        <dl class="stats">
+          <div><dt>All-time Jameses</dt><dd id="sTotal">0</dd></div>
+          <div><dt>Made by hand</dt><dd id="sHand">0</dd></div>
+          <div><dt>Assets owned</dt><dd id="sAssets">0</dd></div>
+          <div><dt>Golden Jameses</dt><dd id="sGold">0</dd></div>
+          <div><dt>Reputation bonus</dt><dd id="sRep">+0%</dd></div>
+          <div><dt>Playing for</dt><dd id="sTime">0m</dd></div>
+        </dl>
+      </div>
+      <div>
+        <div class="panel-head"><span>Achievements</span><span id="aCount">0/0</span></div>
+        <div class="badges" id="badges"></div>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    <span>Saves to this browser every 10 seconds.</span>
+    <span>Built for James. Sorry, James.</span>
+  </footer>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- data ---------------- */
+  var BUILDINGS = [
+    {id:"friend",   name:"Mutual Friend",   cost:15,      rate:0.1,    desc:"Knows a guy who knows James."},
+    {id:"chat",     name:"Group Chat",      cost:100,     rate:1,      desc:"Six people typing. One James."},
+    {id:"cutout",   name:"Cardboard Cutout",cost:1100,    rate:8,      desc:"Life-size, slightly warped, still James."},
+    {id:"booth",    name:"Photo Booth",     cost:12000,   rate:47,     desc:"Four poses a strip. Thousands of strips."},
+    {id:"vat",      name:"Clone Vat",       cost:130000,  rate:260,    desc:"Grown on protein shakes and podcasts."},
+    {id:"memes",    name:"Meme Factory",    cost:1.4e6,   rate:1400,   desc:"Industrial reposting of one photo."},
+    {id:"statue",   name:"Bronze Statue",   cost:2e7,     rate:7800,   desc:"The plaque just says JAMES."},
+    {id:"hq",       name:"James HQ",        cost:3.3e8,   rate:44000,  desc:"Fifty floors, every nameplate identical."},
+    {id:"multi",    name:"James Multiverse",cost:5.1e9,   rate:260000, desc:"In one of them, he replies to texts."},
+    {id:"singular", name:"James Singularity",cost:7.5e10, rate:1.6e6,  desc:"Everything that is, is James."}
+  ];
+
+  var UPGRADES = [
+    {id:"c1", name:"Firmer Handshake", cost:100,   kind:"click", mult:2, req:function(s){return s.clicks>=15}},
+    {id:"c2", name:"Direct Eye Contact",cost:1200, kind:"click", mult:2, req:function(s){return s.clicks>=120}},
+    {id:"c3", name:"Say His Name",     cost:18000, kind:"click", mult:2, req:function(s){return s.clicks>=600}},
+    {id:"c4", name:"Double Tap",       cost:3e5,   kind:"click", mult:2, req:function(s){return s.clicks>=2500}},
+    {id:"c5", name:"Thumbs of Legend", cost:6e6,   kind:"click", mult:2, req:function(s){return s.clicks>=12000}},
+    {id:"m1", name:"Muscle Memory",    cost:5e4,   kind:"muscle",pct:0.01,req:function(s){return owned()>=15},
+      blurb:"Each click also earns 1% of your per-second rate."},
+    {id:"m2", name:"Reflex Arc",       cost:4e6,   kind:"muscle",pct:0.04,req:function(s){return owned()>=60},
+      blurb:"Raises the click bonus to 5% of your per-second rate."},
+    {id:"g1", name:"Cursed Polaroid",  cost:8e5,   kind:"golden",req:function(s){return s.goldens>=2},
+      blurb:"Golden James turns up roughly twice as often."},
+    {id:"r1", name:"Everyone Says Hi", cost:2e6,   kind:"global",mult:1.15,req:function(s){return owned()>=75},
+      blurb:"Every asset produces 15% more James."},
+    {id:"r2", name:"Local Celebrity",  cost:9e8,   kind:"global",mult:1.25,req:function(s){return owned()>=180},
+      blurb:"Every asset produces a further 25% more James."}
+  ];
+  BUILDINGS.forEach(function(b){
+    UPGRADES.push({id:"b_"+b.id, name:"Certified "+b.name, cost:b.cost*18, kind:"building", target:b.id, mult:2,
+      blurb:b.name+" produces twice as much.", req:function(s){return (s.b[b.id]||0)>=10}});
+  });
+
+  var ACHIEVEMENTS = [
+    {id:"a1", icon:"👋", name:"Nice to Meet You", hint:"Click James once.", test:function(s){return s.clicks>=1}},
+    {id:"a2", icon:"👍", name:"Firm Grip", hint:"Click James 100 times.", test:function(s){return s.clicks>=100}},
+    {id:"a3", icon:"🦴", name:"Carpal Tunnel", hint:"Click James 1,000 times.", test:function(s){return s.clicks>=1000}},
+    {id:"a4", icon:"📸", name:"Photogenic", hint:"Load 3 photos of James.", test:function(s){return photos.length>=3}},
+    {id:"a5", icon:"🤝", name:"Small Circle", hint:"Own 10 assets.", test:function(){return owned()>=10}},
+    {id:"a6", icon:"🎩", name:"Entourage", hint:"Own 100 assets.", test:function(){return owned()>=100}},
+    {id:"a7", icon:"✨", name:"Caught Him Golden", hint:"Catch a Golden James.", test:function(s){return s.goldens>=1}},
+    {id:"a8", icon:"💰", name:"A Thousand Jameses", hint:"Earn 1,000 all-time.", test:function(s){return s.total>=1000}},
+    {id:"a9", icon:"🏦", name:"James Economy", hint:"Earn 1 million all-time.", test:function(s){return s.total>=1e6}},
+    {id:"a10",icon:"🌍", name:"Too Much James", hint:"Earn 1 billion all-time.", test:function(s){return s.total>=1e9}},
+    {id:"a11",icon:"🔭", name:"Branching Out", hint:"Open a James Multiverse.", test:function(s){return (s.b.multi||0)>=1}},
+    {id:"a12",icon:"🕳️", name:"The Final James", hint:"Reach the James Singularity.", test:function(s){return (s.b.singular||0)>=1}}
+  ];
+
+  /* ---------------- state ---------------- */
+  var SAVE_KEY = "jamesclicker.save.v1", PHOTO_KEY = "jamesclicker.photos.v1";
+  var s = {james:0, total:0, clicks:0, handmade:0, goldens:0, b:{}, up:[], ach:[], start:Date.now(), seen:Date.now()};
+  var photos = [], photoIdx = 0;
+  var mult = {click:1, global:1, muscle:0, goldenFreq:1, build:{}};
+  var frenzy = {mult:1, until:0}, clickFrenzy = {mult:1, until:0};
+  var prefs = {ink:true, sound:true};
+  var $ = function(id){return document.getElementById(id)};
+
+  function store(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v); return true; }catch(e){ return false; } }
+
+  /* ---------------- numbers ---------------- */
+  var SUF = ["","K","M","B","T","Qa","Qi","Sx","Sp","Oc","No","Dc","Ud"];
+  function fmt(n){
+    if(!isFinite(n)) return "∞";
+    if(n<1000) return (n<100 && n%1!==0) ? (Math.round(n*10)/10).toString() : Math.floor(n).toString();
+    var t=0; while(n>=1000 && t<SUF.length-1){ n/=1000; t++; }
+    return (n<10?n.toFixed(2):n<100?n.toFixed(1):Math.floor(n).toString())+" "+SUF[t];
+  }
+  function plural(n,w){ return fmt(n)+" "+w+(n===1?"":"es") }
+
+  /* ---------------- derived ---------------- */
+  function owned(){ var t=0; for(var k in s.b) t+=s.b[k]; return t; }
+  function cost(b){ return Math.ceil(b.cost*Math.pow(1.15, s.b[b.id]||0)); }
+  function rep(){ return 1 + s.ach.length*0.01; }
+  function jps(){
+    var t=0;
+    for(var i=0;i<BUILDINGS.length;i++){
+      var b=BUILDINGS[i], n=s.b[b.id]||0;
+      if(n) t += n*b.rate*(mult.build[b.id]||1);
+    }
+    return t*mult.global*rep()*frenzy.mult;
+  }
+  function perClick(){
+    return (1*mult.click + jps()*mult.muscle) * rep() * frenzy.mult * clickFrenzy.mult;
+  }
+  function recalc(){
+    mult = {click:1, global:1, muscle:0, goldenFreq:1, build:{}};
+    for(var i=0;i<UPGRADES.length;i++){
+      var u=UPGRADES[i];
+      if(s.up.indexOf(u.id)<0) continue;
+      if(u.kind==="click") mult.click*=u.mult;
+      else if(u.kind==="global") mult.global*=u.mult;
+      else if(u.kind==="muscle") mult.muscle+=u.pct;
+      else if(u.kind==="golden") mult.goldenFreq*=0.5;
+      else if(u.kind==="building") mult.build[u.target]=(mult.build[u.target]||1)*u.mult;
+    }
+  }
+
+  /* ---------------- sound ---------------- */
+  var actx=null, lastBlip=0;
+  function blip(freq, len, vol){
+    if(!prefs.sound) return;
+    try{
+      if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
+      if(actx.state==="suspended") actx.resume();
+      var t=actx.currentTime, o=actx.createOscillator(), g=actx.createGain();
+      o.type="triangle"; o.frequency.setValueAtTime(freq,t);
+      o.frequency.exponentialRampToValueAtTime(freq*0.62, t+len);
+      g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.0001, t+len);
+      o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t+len+0.02);
+    }catch(e){}
+  }
+  function clickSound(){
+    var now=Date.now(); if(now-lastBlip<70) return; lastBlip=now;
+    blip(300+Math.random()*90, 0.08, 0.05);
+  }
+
+  /* ---------------- toasts ---------------- */
+  function toast(title, body){
+    var el=document.createElement("div");
+    el.className="toast";
+    el.innerHTML='<b></b><span></span>';
+    el.firstChild.textContent=title; el.lastChild.textContent=body;
+    $("toasts").appendChild(el);
+    setTimeout(function(){
+      el.style.transition="opacity .4s, transform .4s";
+      el.style.opacity="0"; el.style.transform="translateX(-30px)";
+      setTimeout(function(){ el.remove() }, 420);
+    }, 5200);
+  }
+
+  /* ---------------- photos ---------------- */
+  function loadPhotos(){
+    var raw = store(PHOTO_KEY);
+    if(raw){ try{ photos = JSON.parse(raw)||[] }catch(e){ photos=[] } }
+    if(photos.length){ paintPhotos(); return; }
+    // optional: photos committed next to this file (photos/photos.json -> ["a.jpg", ...])
+    fetch("photos/photos.json").then(function(r){ return r.ok ? r.json() : null }).then(function(list){
+      if(!list || !list.length) return;
+      photos = list.map(function(f){ return /^https?:|^data:|^photos\//.test(f) ? f : "photos/"+f });
+      paintPhotos();
+    }).catch(function(){});
+  }
+  function savePhotos(){
+    if(!store(PHOTO_KEY, JSON.stringify(photos))){
+      toast("Out of room", "This browser will not hold that many photos. Try fewer, or smaller ones.");
+    }
+  }
+  function shrink(file){
+    return new Promise(function(res, rej){
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function(){
+        var max = 620, w = img.width, h = img.height, sc = Math.min(1, max/Math.max(w,h));
+        var c = document.createElement("canvas");
+        c.width = Math.round(w*sc); c.height = Math.round(h*sc);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        res(c.toDataURL("image/jpeg", 0.82));
+      };
+      img.onerror = function(){ URL.revokeObjectURL(url); rej(new Error("bad image")) };
+      img.src = url;
+    });
+  }
+  function addFiles(files){
+    var list = Array.prototype.slice.call(files).filter(function(f){ return /^image\//.test(f.type) });
+    if(!list.length) return;
+    Promise.all(list.slice(0,12).map(function(f){ return shrink(f).catch(function(){return null}) })).then(function(out){
+      var added = out.filter(Boolean);
+      if(!added.length){ toast("Could not read that", "Those files did not come through as images."); return; }
+      photos = photos.concat(added).slice(0,16);
+      savePhotos(); paintPhotos(); checkAch();
+      toast("James loaded", added.length + (added.length===1 ? " photo added." : " photos added."));
+    });
+  }
+  function paintPhotos(){
+    var p = $("portrait");
+    p.querySelectorAll(".plate").forEach(function(n){ n.remove() });
+    if(!photos.length){
+      $("empty").hidden = false;
+      $("stripNote").textContent = "Photos stay in this browser — they are never uploaded anywhere.";
+    } else {
+      $("empty").hidden = true;
+      if(photoIdx >= photos.length) photoIdx = 0;
+      var src = photos[photoIdx];
+      var blue = document.createElement("span"); blue.className = "plate plate-blue";
+      var imB = new Image(); imB.src = src; imB.alt = "James"; blue.appendChild(imB);
+      var pink = document.createElement("span"); pink.className = "plate plate-pink";
+      var imP = new Image(); imP.src = src; imP.alt = ""; pink.appendChild(imP);
+      p.insertBefore(blue, p.firstChild);
+      p.insertBefore(pink, p.firstChild);
+      $("stripNote").textContent = photos.length>1
+        ? "He shuffles on every click. Photos stay in this browser."
+        : "Add more and he will shuffle on every click. Photos stay in this browser.";
+    }
+    var row = $("thumbs");
+    row.querySelectorAll(".thumb").forEach(function(n){ n.remove() });
+    photos.forEach(function(src, i){
+      var d = document.createElement("div"); d.className="thumb";
+      var im = new Image(); im.src = src; im.alt = "James photo "+(i+1);
+      var x = document.createElement("button");
+      x.type="button"; x.textContent="×"; x.title="Remove this photo";
+      x.setAttribute("aria-label","Remove photo "+(i+1));
+      x.onclick = function(){ photos.splice(i,1); savePhotos(); paintPhotos(); };
+      d.appendChild(im); d.appendChild(x);
+      row.insertBefore(d, $("addBtn"));
+    });
+  }
+
+  /* ---------------- clicking ---------------- */
+  function fly(x, y, text){
+    var el = document.createElement("div");
+    el.className = "fly";
+    if(photos.length){
+      var im = new Image(); im.src = photos[photoIdx]; im.alt="";
+      el.appendChild(im);
+    }
+    el.appendChild(document.createTextNode(text));
+    el.style.left = x+"px"; el.style.top = y+"px";
+    el.style.setProperty("--dx", (Math.random()*70-35).toFixed(0)+"px");
+    el.style.setProperty("--rot", (Math.random()*40-20).toFixed(0)+"deg");
+    el.style.animation = "rise 1s ease-out forwards";
+    document.body.appendChild(el);
+    setTimeout(function(){ el.remove() }, 1050);
+  }
+
+  function doClick(ev){
+    var gain = perClick();
+    s.james += gain; s.total += gain; s.clicks++; s.handmade += gain;
+    var p = $("portrait"), r = p.getBoundingClientRect();
+    var x = ev && ev.clientX ? ev.clientX : r.left + r.width/2;
+    var y = ev && ev.clientY ? ev.clientY : r.top + r.height/2;
+    fly(x - 20, y - 26, "+"+fmt(gain));
+    p.classList.remove("hit"); void p.offsetWidth; p.classList.add("hit");
+    setTimeout(function(){ p.classList.remove("hit") }, 110);
+    if(photos.length > 1){
+      photoIdx = (photoIdx + 1) % photos.length;
+      paintPhotos();
+      var f = $("flash"); f.classList.remove("on"); void f.offsetWidth; f.classList.add("on");
+    }
+    clickSound();
+    render();
+  }
+
+  /* ---------------- golden james ---------------- */
+  var goldenEl = null, goldenTimer = 0, nextGolden = Date.now() + (70 + Math.random()*110)*1000;
+  function scheduleGolden(){ nextGolden = Date.now() + (70 + Math.random()*110)*1000*mult.goldenFreq; }
+  function spawnGolden(){
+    if(goldenEl) return;
+    var b = document.createElement("button");
+    b.id = "golden"; b.type = "button";
+    b.setAttribute("aria-label", "Catch the Golden James");
+    if(photos.length){ var im = new Image(); im.src = photos[Math.floor(Math.random()*photos.length)]; im.alt=""; b.appendChild(im); }
+    var m = document.createElement("span"); m.className="mark"; m.textContent = photos.length ? "" : "J";
+    b.appendChild(m);
+    b.style.left = (12 + Math.random()*(Math.max(120, window.innerWidth-120))) + "px";
+    b.style.top  = (90 + Math.random()*Math.max(120, window.innerHeight-240)) + "px";
+    b.onclick = function(){ catchGolden() };
+    document.body.appendChild(b);
+    goldenEl = b;
+    blip(880, 0.5, 0.06);
+    goldenTimer = setTimeout(function(){ despawnGolden(); scheduleGolden(); }, 13000);
+  }
+  function despawnGolden(){
+    if(goldenTimer) clearTimeout(goldenTimer);
+    if(goldenEl){ goldenEl.remove(); goldenEl = null; }
+  }
+  function catchGolden(){
+    despawnGolden(); scheduleGolden();
+    s.goldens++;
+    blip(1320, 0.35, 0.07);
+    var roll = Math.random();
+    if(roll < 0.45){
+      frenzy.mult = 7; frenzy.until = Date.now() + 15000;
+      toast("Frenzy!", "Everything makes 7× as much James for 15 seconds.");
+    } else if(roll < 0.8){
+      var lucky = Math.max(perClick()*13, Math.min(s.james*0.15, jps()*900));
+      s.james += lucky; s.total += lucky;
+      toast("Lucky!", "Found " + fmt(lucky) + " Jameses behind the sofa.");
+    } else {
+      clickFrenzy.mult = 777; clickFrenzy.until = Date.now() + 10000;
+      toast("Clicking Frenzy!", "Clicks are worth 777× for 10 seconds. Go.");
+    }
+    checkAch(); render();
+  }
+
+  /* ---------------- shop ---------------- */
+  var upEls = {}, bEls = {};
+  function buildShop(){
+    var host = $("buildings");
+    BUILDINGS.forEach(function(b){
+      var el = document.createElement("button");
+      el.type = "button"; el.className = "item";
+      el.innerHTML = '<span class="i-name"></span><span class="i-cost num"></span>'+
+                     '<span class="i-desc"></span><span class="i-own num"></span>';
+      el.onclick = function(){ buyBuilding(b) };
+      host.appendChild(el);
+      bEls[b.id] = el;
+    });
+  }
+  function buyBuilding(b){
+    var c = cost(b);
+    if(s.james < c) return;
+    s.james -= c; s.b[b.id] = (s.b[b.id]||0)+1;
+    blip(190 + (s.b[b.id]%8)*22, 0.12, 0.05);
+    checkAch(); render();
+  }
+  function buyUpgrade(u){
+    if(s.james < u.cost || s.up.indexOf(u.id)>=0) return;
+    s.james -= u.cost; s.up.push(u.id); recalc();
+    blip(660, 0.18, 0.06);
+    toast("Upgrade bought", u.name + " — " + upgradeBlurb(u));
+    render();
+  }
+  function upgradeBlurb(u){
+    if(u.blurb) return u.blurb;
+    if(u.kind==="click") return "Clicking James is worth twice as much.";
+    return "";
+  }
+
+  function renderShop(){
+    var lockedShown = false, lockedLeft = 0;
+    for(var i=0;i<BUILDINGS.length;i++){
+      var b = BUILDINGS[i], el = bEls[b.id], n = s.b[b.id]||0, c = cost(b);
+      var unlocked = n>0 || s.total >= b.cost*0.35 || i===0;
+      if(!unlocked){
+        if(lockedShown){ el.hidden = true; lockedLeft++; continue; }
+        lockedShown = true;
+      }
+      el.hidden = false;
+      el.classList.toggle("locked", !unlocked);
+      el.disabled = !unlocked || s.james < c;
+      el.children[0].textContent = unlocked ? b.name : "— locked —";
+      el.children[1].textContent = unlocked ? fmt(c) : "?";
+      el.children[3].textContent = n ? n : "";
+      if(!unlocked){
+        el.children[2].textContent = "Keep earning to reveal.";
+      } else if(n){
+        var each = b.rate*(mult.build[b.id]||1)*mult.global*rep();
+        el.children[2].innerHTML = "";
+        el.children[2].appendChild(document.createTextNode(b.desc+" "));
+        var em = document.createElement("em");
+        em.textContent = fmt(each*n)+"/s total";
+        el.children[2].appendChild(em);
+      } else {
+        el.children[2].textContent = b.desc;
+      }
+    }
+    var rest = $("restRow");
+    if(lockedLeft){
+      if(!rest){
+        rest = document.createElement("p"); rest.className="rest"; rest.id="restRow";
+        $("buildings").appendChild(rest);
+      }
+      rest.hidden = false;
+      rest.textContent = lockedLeft + (lockedLeft===1 ? " more asset still out of reach" : " more assets still out of reach");
+    } else if(rest){ rest.hidden = true; }
+
+    var host = $("upgrades"), avail = UPGRADES.filter(function(u){
+      return s.up.indexOf(u.id)<0 && u.req(s);
+    }).slice(0,5);
+    var keep = {};
+    avail.forEach(function(u){ keep[u.id]=1 });
+    Object.keys(upEls).forEach(function(id){
+      if(!keep[id]){ upEls[id].remove(); delete upEls[id]; }
+    });
+    avail.forEach(function(u){
+      var el = upEls[u.id];
+      if(!el){
+        el = document.createElement("button");
+        el.type="button"; el.className="item up";
+        el.innerHTML = '<span class="i-name"></span><span class="i-cost num"></span><span class="i-desc"></span>';
+        el.children[0].textContent = u.name;
+        el.children[2].textContent = upgradeBlurb(u);
+        el.onclick = function(){ buyUpgrade(u) };
+        host.appendChild(el);
+        upEls[u.id] = el;
+      }
+      el.children[1].textContent = fmt(u.cost);
+      el.disabled = s.james < u.cost;
+    });
+    if(!avail.length){
+      if(!host.querySelector(".none")){
+        var n = document.createElement("p"); n.className="none";
+        n.textContent = "Nothing new yet. Keep clicking and buying.";
+        host.appendChild(n);
+      }
+    } else {
+      var ex = host.querySelector(".none"); if(ex) ex.remove();
+    }
+    $("upCount").textContent = s.up.length + " owned";
+    $("bCount").textContent = owned() + " owned";
+  }
+
+  /* ---------------- achievements ---------------- */
+  function buildBadges(){
+    var host = $("badges");
+    ACHIEVEMENTS.forEach(function(a){
+      var d = document.createElement("div");
+      d.className = "badge locked";
+      d.id = "ach_"+a.id;
+      d.textContent = "?";
+      d.title = a.hint;
+      host.appendChild(d);
+    });
+    $("aCount").textContent = "0/"+ACHIEVEMENTS.length;
+  }
+  function checkAch(){
+    for(var i=0;i<ACHIEVEMENTS.length;i++){
+      var a = ACHIEVEMENTS[i];
+      if(s.ach.indexOf(a.id)>=0) continue;
+      var ok = false; try{ ok = a.test(s) }catch(e){}
+      if(ok){
+        s.ach.push(a.id);
+        var d = $("ach_"+a.id);
+        if(d){ d.className="badge got"; d.textContent=a.icon; d.title=a.name+" — "+a.hint; }
+        toast("Achievement", a.name + " — " + a.hint);
+        blip(990, 0.25, 0.05);
+      }
+    }
+    $("aCount").textContent = s.ach.length+"/"+ACHIEVEMENTS.length;
+  }
+  function paintBadges(){
+    s.ach.forEach(function(id){
+      var a = null;
+      for(var i=0;i<ACHIEVEMENTS.length;i++) if(ACHIEVEMENTS[i].id===id) a=ACHIEVEMENTS[i];
+      var d = $("ach_"+id);
+      if(a && d){ d.className="badge got"; d.textContent=a.icon; d.title=a.name+" — "+a.hint; }
+    });
+    $("aCount").textContent = s.ach.length+"/"+ACHIEVEMENTS.length;
+  }
+
+  /* ---------------- render ---------------- */
+  var lastRender = 0;
+  function render(){
+    var r = jps();
+    $("count").innerHTML = "";
+    $("count").appendChild(document.createTextNode(fmt(s.james)));
+    var sm = document.createElement("small");
+    sm.textContent = "Jameses in circulation";
+    $("count").appendChild(sm);
+    $("rate").innerHTML = "manufacturing <b>"+fmt(r)+"</b> per second";
+    $("perClick").textContent = fmt(perClick());
+    $("perSec").textContent = fmt(r);
+    $("clicks").textContent = s.clicks.toLocaleString();
+    $("sTotal").textContent = fmt(s.total);
+    $("sHand").textContent = fmt(s.handmade);
+    $("sAssets").textContent = owned().toLocaleString();
+    $("sGold").textContent = s.goldens.toLocaleString();
+    $("sRep").textContent = "+"+(s.ach.length)+"%";
+    var mins = Math.floor((Date.now()-s.start)/60000);
+    $("sTime").textContent = mins<60 ? mins+"m" : Math.floor(mins/60)+"h "+(mins%60)+"m";
+
+    var bb = $("buffbar"), buffs = [];
+    if(frenzy.until>Date.now()) buffs.push("7× frenzy "+Math.ceil((frenzy.until-Date.now())/1000)+"s");
+    if(clickFrenzy.until>Date.now()) buffs.push("777× clicks "+Math.ceil((clickFrenzy.until-Date.now())/1000)+"s");
+    bb.innerHTML = "";
+    buffs.forEach(function(t){
+      var e = document.createElement("span"); e.className="buff"; e.textContent=t; bb.appendChild(e);
+    });
+    renderShop();
+  }
+
+  /* ---------------- save / load ---------------- */
+  function save(){
+    s.seen = Date.now();
+    store(SAVE_KEY, JSON.stringify(s));
+  }
+  function load(){
+    var raw = store(SAVE_KEY);
+    if(!raw) return;
+    try{
+      var d = JSON.parse(raw);
+      if(!d || typeof d.james !== "number") return;
+      s.james=d.james||0; s.total=d.total||0; s.clicks=d.clicks||0; s.handmade=d.handmade||0;
+      s.goldens=d.goldens||0; s.b=d.b||{}; s.up=d.up||[]; s.ach=d.ach||[];
+      s.start=d.start||Date.now(); s.seen=d.seen||Date.now();
+      recalc();
+      var away = (Date.now()-s.seen)/1000;
+      if(away > 90){
+        var gained = jps() * Math.min(away, 10800) * 0.5;
+        if(gained > 0){
+          s.james += gained; s.total += gained;
+          setTimeout(function(){
+            toast("While you were out", "James kept at it: +"+fmt(gained)+" Jameses.");
+          }, 700);
+        }
+      }
+    }catch(e){}
+  }
+
+  /* ---------------- wiring ---------------- */
+  function start(){
+    buildShop(); buildBadges();
+    load(); loadPhotos(); paintBadges(); recalc();
+
+    var savedPrefs = store("jamesclicker.prefs");
+    if(savedPrefs){ try{ prefs = JSON.parse(savedPrefs) }catch(e){} }
+    $("portrait").classList.toggle("ink", prefs.ink);
+    $("inkBtn").setAttribute("aria-pressed", String(prefs.ink));
+    $("soundBtn").setAttribute("aria-pressed", String(prefs.sound));
+
+    $("portrait").addEventListener("click", doClick);
+    $("addBtn").addEventListener("click", function(e){ e.stopPropagation(); $("fileInput").click() });
+    $("fileInput").addEventListener("change", function(e){ addFiles(e.target.files); e.target.value=""; });
+
+    ["dragenter","dragover"].forEach(function(t){
+      document.addEventListener(t, function(e){ e.preventDefault(); $("portrait").classList.add("drop") });
+    });
+    ["dragleave","drop"].forEach(function(t){
+      document.addEventListener(t, function(e){ e.preventDefault(); $("portrait").classList.remove("drop") });
+    });
+    document.addEventListener("drop", function(e){
+      if(e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+    });
+
+    $("inkBtn").addEventListener("click", function(){
+      prefs.ink = !prefs.ink;
+      $("portrait").classList.toggle("ink", prefs.ink);
+      this.setAttribute("aria-pressed", String(prefs.ink));
+      store("jamesclicker.prefs", JSON.stringify(prefs));
+    });
+    $("soundBtn").addEventListener("click", function(){
+      prefs.sound = !prefs.sound;
+      this.setAttribute("aria-pressed", String(prefs.sound));
+      store("jamesclicker.prefs", JSON.stringify(prefs));
+      if(prefs.sound) blip(520, 0.12, 0.05);
+    });
+    $("resetBtn").addEventListener("click", function(){
+      if(!window.confirm("Wipe your progress? Photos of James are kept.")) return;
+      s = {james:0,total:0,clicks:0,handmade:0,goldens:0,b:{},up:[],ach:[],start:Date.now(),seen:Date.now()};
+      frenzy={mult:1,until:0}; clickFrenzy={mult:1,until:0};
+      Object.keys(upEls).forEach(function(id){ upEls[id].remove(); delete upEls[id] });
+      document.querySelectorAll(".badge").forEach(function(d){ d.className="badge locked"; d.textContent="?" });
+      recalc(); save(); render();
+      toast("Back to zero", "One James. No assets. Good luck.");
+    });
+
+    document.addEventListener("keydown", function(e){
+      if((e.key===" "||e.key==="Enter") && document.activeElement===$("portrait")) e.preventDefault();
+    });
+
+    var last = Date.now();
+    setInterval(function(){
+      var now = Date.now(), dt = Math.min((now-last)/1000, 5); last = now;
+      if(frenzy.until && now>frenzy.until){ frenzy.mult=1; frenzy.until=0; }
+      if(clickFrenzy.until && now>clickFrenzy.until){ clickFrenzy.mult=1; clickFrenzy.until=0; }
+      var g = jps()*dt;
+      if(g>0){ s.james+=g; s.total+=g; }
+      if(now > nextGolden && !goldenEl){ spawnGolden(); }
+      checkAch();
+      render();
+    }, 200);
+
+    setInterval(save, 10000);
+    window.addEventListener("beforeunload", save);
+    window.addEventListener("pagehide", save);
+
+    render();
+  }
+
+  if(window.claude && window.claude.hot){
+    try{ window.claude.hot.snapshot(function(){ return {save:JSON.stringify(s)} }) }catch(e){}
+  }
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
+})();
+</script>

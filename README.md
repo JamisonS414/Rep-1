@@ -86,3 +86,9 @@ Clipping another creator's stream is their call, not the tool's:
   reused-content rules for monetisation, regardless of permission.
 
 When in doubt, ask the streamer first. Most say yes.
+
+## James Clicker
+
+An idle clicker game about one guy, in `james-clicker/`. Open
+`james-clicker/index.html` in a browser, add a few photos of James, and click him.
+See `james-clicker/photos/README.md` for the two ways to load photos.
