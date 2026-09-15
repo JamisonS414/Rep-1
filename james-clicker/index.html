@@ -449,6 +449,12 @@
 
   /* ---------------- state ---------------- */
   var SAVE_KEY = "jamesclicker.save.v1", PHOTO_KEY = "jamesclicker.photos.v1";
+
+  /* Photos shipped with the page, as "data:image/jpeg;base64,..." strings. These are
+     the ones every viewer sees before they add their own; the first is the portrait
+     James opens on. Anything a viewer adds or removes is kept in their browser and
+     wins over this list. See photos/README.md. */
+  var DEFAULT_PHOTOS = [];
   var s = {james:0, total:0, clicks:0, handmade:0, goldens:0, b:{}, up:[], ach:[], start:Date.now(), seen:Date.now()};
   var photos = [], photoIdx = 0;
   var mult = {click:1, global:1, muscle:0, goldenFreq:1, build:{}};
@@ -532,8 +538,13 @@
   /* ---------------- photos ---------------- */
   function loadPhotos(){
     var raw = store(PHOTO_KEY);
-    if(raw){ try{ photos = JSON.parse(raw)||[] }catch(e){ photos=[] } }
-    if(photos.length){ paintPhotos(); return; }
+    if(raw){
+      // this browser has its own set, even if the viewer emptied it
+      try{ photos = JSON.parse(raw)||[] }catch(e){ photos=[] }
+      paintPhotos();
+      return;
+    }
+    if(DEFAULT_PHOTOS.length){ photos = DEFAULT_PHOTOS.slice(); paintPhotos(); return; }
     // optional: photos committed next to this file (photos/photos.json -> ["a.jpg", ...])
     fetch("photos/photos.json").then(function(r){ return r.ok ? r.json() : null }).then(function(list){
       if(!list || !list.length) return;
@@ -589,8 +600,8 @@
       p.insertBefore(blue, p.firstChild);
       p.insertBefore(pink, p.firstChild);
       $("stripNote").textContent = photos.length>1
-        ? "He shuffles on every click. Photos stay in this browser."
-        : "Add more and he will shuffle on every click. Photos stay in this browser.";
+        ? "He shuffles on every click. Anything you add stays in this browser."
+        : "Add more and he will shuffle on every click. Anything you add stays in this browser.";
     }
     var row = $("thumbs");
     row.querySelectorAll(".thumb").forEach(function(n){ n.remove() });
