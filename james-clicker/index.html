@@ -529,9 +529,9 @@
   </footer>
 </div>
 
-<script id="shared-event" type="application/json">{"kind":"frenzy","until":1789446840839,"by":"Jamison"}</script>
+<script id="shared-event" type="application/json">{"kind":"storm","until":1789446716972,"by":"Jamison"}</script>
 
-<script id="shared-board" type="application/json">[{"id":"24f407b8d915ccb8","name":"Coopdawg","total":447880740,"clicks":26404,"assets":241,"at":1789445140733},{"id":"caaec0278765c663","name":"Jamison","total":4324242,"clicks":655,"assets":134,"at":1789445941023},{"id":"e5ad662b172b9e10","name":"Matthew","total":340374,"clicks":1424,"assets":48,"at":1789444348268},{"id":"bb7bf02305c122bf","name":"Max M","total":229323,"clicks":27446,"assets":76,"at":1789444319196},{"id":"aba3083641186674","name":"Jamison 2","total":142,"clicks":141,"assets":0,"at":1789444230656}]</script>
+<script id="shared-board" type="application/json">[{"id":"24f407b8d915ccb8","name":"Coopdawg","total":447880740,"clicks":26404,"assets":241,"at":1789445140733},{"id":"caaec0278765c663","name":"Jamison","total":12871339,"clicks":655,"assets":134,"at":1789446417141},{"id":"e5ad662b172b9e10","name":"Matthew","total":340374,"clicks":1424,"assets":48,"at":1789444348268},{"id":"bb7bf02305c122bf","name":"Max M","total":229323,"clicks":27446,"assets":76,"at":1789444319196},{"id":"aba3083641186674","name":"Jamison 2","total":142,"clicks":141,"assets":0,"at":1789444230656}]</script>
 
 <div class="gate" id="gate" hidden>
   <div class="gate-card">
@@ -971,7 +971,6 @@
       throw err;
     }).then(function(count){
       toast("Board published", count + " scores saved into the page.");
-      toast("Board published", "Everyone who opens the link sees these scores.");
     }, function(err){
       var code = err && err.code;
       if(code === "not_writer" || code === "not_granted"){
