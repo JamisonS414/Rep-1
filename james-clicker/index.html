@@ -377,6 +377,19 @@
     padding:8px 12px;border:1.5px solid var(--pink);background:var(--pink);color:#fff;border-radius:2px;
     font-family:"Space Mono",monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;
   }
+  .host-hint{margin:0 0 9px;font-size:12px;color:var(--ink-soft);line-height:1.4}
+  .host-grid{display:flex;gap:6px;flex-wrap:wrap}
+  .host-dur{
+    display:flex;align-items:center;gap:7px;margin-top:9px;
+    font-family:"Space Mono",monospace;font-size:10px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--ink-soft);
+  }
+  .host-dur select{
+    flex:1 1 auto;min-width:0;padding:6px 7px;border:1.5px solid var(--line-hard);border-radius:2px;
+    background:var(--paper);color:var(--ink);font-family:"Space Mono",monospace;font-size:11px;
+  }
+  #evEnd{margin-top:9px}
+  .buff.host{background:var(--pink);color:#fff}
   .board-note{margin:9px 0 0;font-family:"Space Mono",monospace;font-size:10px;line-height:1.5;
     color:var(--ink-soft)}
 
@@ -468,6 +481,27 @@
         </form>
         <p class="board-note" id="boardNote"></p>
       </div>
+
+      <div id="hostPanel" hidden>
+        <div class="panel-head"><span>Host controls</span><span>only you</span></div>
+        <p class="host-hint">Start an event for everyone playing. It reaches every open page.</p>
+        <div class="host-grid">
+          <button type="button" class="mini" data-ev="double">&times;2 clicks</button>
+          <button type="button" class="mini" data-ev="frenzy">&times;7 everything</button>
+          <button type="button" class="mini" data-ev="storm">&times;777 clicks</button>
+        </div>
+        <label class="host-dur" for="evMins">Lasting
+          <select id="evMins">
+            <option value="1">1 minute</option>
+            <option value="5">5 minutes</option>
+            <option value="15" selected>15 minutes</option>
+            <option value="60">1 hour</option>
+          </select>
+        </label>
+        <button type="button" class="mini pub" id="evEnd" hidden>End event now</button>
+        <p class="board-note" id="hostNote"></p>
+      </div>
+
       <div>
         <div class="panel-head"><span>Ledger</span></div>
         <dl class="stats">
@@ -491,6 +525,8 @@
     <span>Built for James. Sorry, James.</span>
   </footer>
 </div>
+
+<script id="shared-event" type="application/json">null</script>
 
 <script id="shared-board" type="application/json">[{"id":"caaec0278765c663","name":"Jamison","total":351379,"clicks":417,"assets":99,"at":1789443732950}]</script>
 
@@ -580,6 +616,7 @@
   var prefs = {ink:true, sound:true};
   var player = null;                       // {id, name} for this browser
   var board = [], published = [], boardShown = null, artifactNs = null;
+  var hostEvent = null;   // the event running for everyone, read from the page
   var $ = function(id){return document.getElementById(id)};
 
   function store(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v); return true; }catch(e){ return false; } }
@@ -674,6 +711,35 @@
       if(rows && rows.length) published = rows.map(tidyEntry).filter(Boolean);
     }catch(e){}
   }
+  var EVENTS = {
+    double: {label:"Double clicks",   all:1, click:2},
+    frenzy: {label:"Frenzy",          all:7, click:1},
+    storm:  {label:"Clicking frenzy", all:1, click:777}
+  };
+  // an event the host published; it is plain text in the page, so validate it
+  function loadEvent(){
+    var el = document.getElementById("shared-event");
+    if(!el) return;
+    try{
+      var e = JSON.parse(el.textContent || "null");
+      if(!e || !Object.prototype.hasOwnProperty.call(EVENTS, e.kind)) return;
+      if(typeof e.until !== "number" || !isFinite(e.until)) return;
+      hostEvent = {
+        kind: e.kind,
+        until: e.until,
+        by: cleanName(e.by) || "the host",
+        all: EVENTS[e.kind].all,
+        click: EVENTS[e.kind].click,
+        label: EVENTS[e.kind].label
+      };
+    }catch(err){}
+  }
+  function liveEvent(){
+    return (hostEvent && hostEvent.until > Date.now()) ? hostEvent : null;
+  }
+  function eventAll(){ var e = liveEvent(); return e ? e.all : 1; }
+  function eventClick(){ var e = liveEvent(); return e ? e.click : 1; }
+
   // published rows and pasted codes describe the same people; newest wins
   function mergedRows(){
     var map = {}, all = published.concat(board);
@@ -801,9 +867,17 @@
       if(!ns) return;
       artifactNs = ns;
       $("publishBoard").hidden = false;
+      $("hostPanel").hidden = false;
+      renderHost();
     }, function(){});
   }
   var BOARD_RE = /(<script id="shared-board" type="application\/json">)([\s\S]*?)(<\/script>)/;
+  var EVENT_RE = /(<script id="shared-event" type="application\/json">)([\s\S]*?)(<\/script>)/;
+  function embed(v){ return JSON.stringify(v).replace(/</g, "\\u003C"); }
+  function clock(ms){
+    var s = Math.max(0, Math.ceil(ms/1000));
+    return s < 60 ? s + "s" : Math.floor(s/60) + "m " + (s%60) + "s";
+  }
 
   // Whoever publishes must not drop the rows already in the version they are
   // overwriting, so the merge starts from the source text being published —
@@ -830,16 +904,21 @@
       });
   }
 
-  function attemptPublish(){
+  // opts.event: set the running event (null clears it). The board is always
+  // carried forward from the version being overwritten.
+  function attemptPublish(opts){
     return fetch(location.href, {cache:"no-store"}).then(function(r){
       if(!r.ok) throw new Error("source " + r.status);
       return r.text();
     }).then(function(text){
       if(!BOARD_RE.test(text)) throw new Error("marker");
       var rows = rowsForPublish(text);
-      var json = JSON.stringify(rows).replace(/</g, "\\u003C");
-      return artifactNs.publish(text.replace(BOARD_RE, function(m, a, b, c){ return a + json + c }))
-        .then(function(){ return rows.length });
+      var out = text.replace(BOARD_RE, function(m, a, b, c){ return a + embed(rows) + c });
+      if(opts && "event" in opts){
+        if(!EVENT_RE.test(out)) throw new Error("marker");
+        out = out.replace(EVENT_RE, function(m, a, b, c){ return a + embed(opts.event) + c });
+      }
+      return artifactNs.publish(out).then(function(){ return rows.length });
     });
   }
 
@@ -847,12 +926,12 @@
     if(!artifactNs) return;
     var btn = $("publishBoard"), label = btn.textContent;
     btn.disabled = true; btn.textContent = "Publishing…";
-    attemptPublish().catch(function(err){
+    attemptPublish({}).catch(function(err){
       // someone published between our fetch and our write: start over from
       // their version so both sets of scores survive
       if(err && err.code === "conflict"){
         boardNote("Someone else published first — merging their scores in…");
-        return attemptPublish();
+        return attemptPublish({});
       }
       throw err;
     }).then(function(count){
@@ -871,6 +950,61 @@
     }).then(function(){
       btn.disabled = false; btn.textContent = label;
     });
+  }
+
+  function renderHost(){
+    var panel = $("hostPanel");
+    if(panel.hidden) return;
+    var ev = liveEvent();
+    $("evEnd").hidden = !ev;
+    if(ev){
+      $("hostNote").textContent = ev.label + " is running for everyone \u2014 " +
+        clock(ev.until - Date.now()) + " left.";
+      $("hostNote").hidden = false;
+    } else if(!hostBusy){
+      $("hostNote").textContent = "No event running.";
+      $("hostNote").hidden = false;
+    }
+  }
+  var hostBusy = false;
+  function runEvent(kind, mins){
+    if(!artifactNs || hostBusy) return;
+    var def = EVENTS[kind];
+    if(!def) return;
+    hostBusy = true;
+    $("hostNote").textContent = "Starting " + def.label + " for everyone\u2026";
+    $("hostNote").hidden = false;
+    var ev = kind === null ? null : {kind:kind, until: Date.now() + mins*60000, by: player ? player.name : ""};
+    pushEvent(ev, def.label + " is running for everyone.");
+  }
+  function endEvent(){
+    if(!artifactNs || hostBusy) return;
+    hostBusy = true;
+    $("hostNote").textContent = "Ending the event\u2026";
+    $("hostNote").hidden = false;
+    pushEvent(null, "Event ended for everyone.");
+  }
+  function pushEvent(ev, okMsg){
+    attemptPublish({event: ev}).catch(function(err){
+      if(err && err.code === "conflict") return attemptPublish({event: ev});
+      throw err;
+    }).then(function(){
+      hostEvent = null;
+      if(ev){
+        var el = document.getElementById("shared-event");
+        if(el) el.textContent = JSON.stringify(ev);
+        loadEvent();
+      }
+      $("hostNote").textContent = okMsg;
+      toast(ev ? "Event started" : "Event ended", okMsg);
+    }, function(err){
+      var code = err && err.code;
+      if(code === "not_writer" || code === "not_granted"){
+        $("hostPanel").hidden = true;
+      } else {
+        $("hostNote").textContent = "Could not publish that just now. Try again in a moment.";
+      }
+    }).then(function(){ hostBusy = false; renderHost(); });
   }
 
   function showCode(){
@@ -931,10 +1065,10 @@
       var b=BUILDINGS[i], n=s.b[b.id]||0;
       if(n) t += n*b.rate*(mult.build[b.id]||1);
     }
-    return t*mult.global*rep()*frenzy.mult;
+    return t*mult.global*rep()*frenzy.mult*eventAll();
   }
   function perClick(){
-    return (1*mult.click + jps()*mult.muscle) * rep() * frenzy.mult * clickFrenzy.mult;
+    return (1*mult.click + jps()*mult.muscle) * rep() * frenzy.mult * clickFrenzy.mult * eventAll() * eventClick();
   }
   function recalc(){
     mult = {click:1, global:1, muscle:0, goldenFreq:1, build:{}};
@@ -1315,6 +1449,14 @@
     buffs.forEach(function(t){
       var e = document.createElement("span"); e.className="buff"; e.textContent=t; bb.appendChild(e);
     });
+    var ev = liveEvent();
+    if(ev){
+      var h = document.createElement("span");
+      h.className = "buff host";
+      h.textContent = ev.label + " \u00B7 " + clock(ev.until - Date.now()) + " left";
+      bb.appendChild(h);
+    }
+    renderHost();
     renderShop();
     if(player){
       var key = fmt(s.total) + "|" + board.length;
@@ -1364,7 +1506,14 @@
     $("gateForm").addEventListener("submit", submitGate);
     $("renameBtn").addEventListener("click", function(){ openGate(true) });
     loadPublished();
+    loadEvent();
     loadBoard();
+    Array.prototype.forEach.call(document.querySelectorAll("[data-ev]"), function(btn){
+      btn.addEventListener("click", function(){
+        runEvent(btn.getAttribute("data-ev"), parseInt($("evMins").value, 10) || 15);
+      });
+    });
+    $("evEnd").addEventListener("click", endEvent);
     initPublish();
     $("publishBoard").addEventListener("click", publishBoard);
     $("copyScore").addEventListener("click", showCode);
