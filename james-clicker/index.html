@@ -803,32 +803,68 @@
       $("publishBoard").hidden = false;
     }, function(){});
   }
+  var BOARD_RE = /(<script id="shared-board" type="application\/json">)([\s\S]*?)(<\/script>)/;
+
+  // Whoever publishes must not drop the rows already in the version they are
+  // overwriting, so the merge starts from the source text being published —
+  // not from what this page happened to load.
+  function rowsForPublish(sourceText){
+    var fromSource = [], m = sourceText.match(BOARD_RE);
+    if(m){
+      try{ fromSource = (JSON.parse(m[2]) || []).map(tidyEntry).filter(Boolean); }catch(e){}
+    }
+    var map = {};
+    fromSource.concat(published, board).forEach(function(e){
+      if(!e || !e.id) return;
+      var cur = map[e.id];
+      var newer = !cur || (e.at||0) > (cur.at||0) ||
+                  ((e.at||0) === (cur.at||0) && (e.total||0) > (cur.total||0));
+      if(newer) map[e.id] = e;
+    });
+    if(player) map[player.id] = selfEntry();
+    return Object.keys(map).map(function(k){ return map[k] })
+      .sort(function(a,b){ return (b.total||0) - (a.total||0) })
+      .slice(0,25)
+      .map(function(e){
+        return {id:e.id, name:e.name, total:e.total, clicks:e.clicks, assets:e.assets, at:e.at};
+      });
+  }
+
+  function attemptPublish(){
+    return fetch(location.href, {cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("source " + r.status);
+      return r.text();
+    }).then(function(text){
+      if(!BOARD_RE.test(text)) throw new Error("marker");
+      var rows = rowsForPublish(text);
+      var json = JSON.stringify(rows).replace(/</g, "\\u003C");
+      return artifactNs.publish(text.replace(BOARD_RE, function(m, a, b, c){ return a + json + c }))
+        .then(function(){ return rows.length });
+    });
+  }
+
   function publishBoard(){
     if(!artifactNs) return;
     var btn = $("publishBoard"), label = btn.textContent;
     btn.disabled = true; btn.textContent = "Publishing…";
-    var rows = mergedRows().slice(0,25).map(function(e){
-      return {id:e.id, name:e.name, total:e.total, clicks:e.clicks, assets:e.assets, at:e.at};
-    });
-    // rewrite the board block in this page's own source, then save that as the
-    // next version — never a serialization of the live DOM
-    fetch(location.href, {cache:"no-store"}).then(function(r){
-      if(!r.ok) throw new Error("source " + r.status);
-      return r.text();
-    }).then(function(text){
-      var re = /(<script id="shared-board" type="application\/json">)([\s\S]*?)(<\/script>)/;
-      if(!re.test(text)) throw new Error("marker");
-      var json = JSON.stringify(rows).replace(/</g, "\\u003C");
-      return artifactNs.publish(text.replace(re, function(m, a, b, c){ return a + json + c }));
-    }).then(function(){
-      toast("Board published", "Everyone who opens the link now sees these scores.");
+    attemptPublish().catch(function(err){
+      // someone published between our fetch and our write: start over from
+      // their version so both sets of scores survive
+      if(err && err.code === "conflict"){
+        boardNote("Someone else published first — merging their scores in…");
+        return attemptPublish();
+      }
+      throw err;
+    }).then(function(count){
+      boardNote(count + " scores are now on the published board.");
+      toast("Board published", "Everyone who opens the link sees these scores.");
     }, function(err){
       var code = err && err.code;
       if(code === "not_writer" || code === "not_granted"){
         btn.hidden = true;
-        boardNote("Only whoever owns this page can publish the board.");
+        boardNote("You can play, but only someone with edit access can publish the board. Send your code to whoever keeps it.");
       } else if(code === "conflict"){
-        boardNote("Someone published first. Reload the page, then publish again.");
+        boardNote("Two people published at once. Reload the page and publish again.");
       } else {
         boardNote("Could not publish the board just now. Try again in a moment.");
       }
