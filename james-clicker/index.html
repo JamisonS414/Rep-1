@@ -391,6 +391,8 @@
   #evEnd{margin-top:9px}
   .mini.nova{flex-basis:100%;border-color:var(--yellow);color:var(--ink)}
   .mini.nova:hover{background:var(--yellow);border-color:var(--yellow);color:#4a3600}
+  .mini.quad{flex-basis:100%;border-color:var(--ink);color:var(--ink);font-weight:700}
+  .mini.quad:hover{background:var(--ink);border-color:var(--ink);color:var(--paper)}
   .buff.host{background:var(--pink);color:#fff}
   .board-note{margin:9px 0 0;font-family:"Space Mono",monospace;font-size:10px;line-height:1.5;
     color:var(--ink-soft)}
@@ -492,6 +494,7 @@
           <button type="button" class="mini" data-ev="frenzy">&times;7 everything</button>
           <button type="button" class="mini" data-ev="storm">&times;777 clicks</button>
           <button type="button" class="mini nova" data-ev="nova">&times;5B clicks</button>
+          <button type="button" class="mini quad" data-ev="quad">&times;1 quadrillion</button>
         </div>
         <label class="host-dur" for="evMins">Lasting
           <select id="evMins">
@@ -719,7 +722,8 @@
     double: {label:"Double clicks",   all:1, click:2},
     frenzy: {label:"Frenzy",          all:7, click:1},
     storm:  {label:"Clicking frenzy", all:1, click:777},
-    nova:   {label:"Five billion James", all:1, click:5e9}
+    nova:   {label:"Five billion James", all:1, click:5e9},
+    quad:   {label:"One quadrillion James", all:1, click:1e15}
   };
   // an event the host published; it is plain text in the page, so validate it
   function loadEvent(){
