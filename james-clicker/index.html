@@ -346,6 +346,34 @@
   .board li.me .rank{color:var(--pink)}
   .board li.me .score{color:var(--pink)}
   .board li.top .score{font-size:13.5px}
+  .board li .drop-row{
+    grid-column:4;font-family:"Space Mono",monospace;font-size:12px;line-height:1;
+    color:var(--ink-soft);opacity:.45;padding:0 0 0 6px;
+  }
+  .board li .drop-row:hover{opacity:1;color:var(--pink)}
+  .board li{grid-template-columns:22px minmax(0,1fr) auto auto}
+  .board-tools{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .mini{
+    flex:1 1 auto;padding:7px 8px;border:1.5px solid var(--line-hard);border-radius:2px;
+    font-family:"Space Mono",monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--ink-soft);white-space:nowrap;
+  }
+  .mini:hover{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .code-box{margin-top:8px}
+  .code-box label{
+    display:block;font-family:"Space Mono",monospace;font-size:9.5px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink-soft);margin-bottom:4px;
+  }
+  .code-box input,.paste input{
+    width:100%;min-width:0;padding:8px 9px;border:1.5px solid var(--ink);border-radius:2px;
+    background:var(--paper);color:var(--ink);font-family:"Space Mono",monospace;font-size:11px;
+  }
+  .paste{display:flex;gap:6px;margin-top:8px}
+  .paste input{flex:1 1 auto}
+  .paste button{
+    padding:8px 12px;border:1.5px solid var(--pink);background:var(--pink);color:#fff;border-radius:2px;
+    font-family:"Space Mono",monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;
+  }
   .board-note{margin:9px 0 0;font-family:"Space Mono",monospace;font-size:10px;line-height:1.5;
     color:var(--ink-soft)}
 
@@ -422,6 +450,18 @@
       <div>
         <div class="panel-head"><span>Leaderboard</span><button type="button" class="link" id="renameBtn">Change name</button></div>
         <ol class="board" id="board"></ol>
+        <div class="board-tools">
+          <button type="button" class="mini" id="copyScore">Copy my score</button>
+          <button type="button" class="mini" id="addScore">Add a friend's</button>
+        </div>
+        <div class="code-box" id="codeBox" hidden>
+          <label for="codeField">Send this to whoever keeps the board</label>
+          <input id="codeField" readonly spellcheck="false">
+        </div>
+        <form class="paste" id="pasteForm" hidden>
+          <input id="pasteInput" placeholder="Paste their JC1- code" spellcheck="false" autocomplete="off">
+          <button type="submit">Add</button>
+        </form>
         <p class="board-note" id="boardNote"></p>
       </div>
       <div>
@@ -520,7 +560,7 @@
 
   /* ---------------- state ---------------- */
   var SAVE_KEY = "jamesclicker.save.v1", PHOTO_KEY = "jamesclicker.photos.v1";
-  var PLAYER_KEY = "jamesclicker.player.v1";
+  var PLAYER_KEY = "jamesclicker.player.v1", BOARD_KEY = "jamesclicker.board.v1";
 
   /* Photos shipped with the page, as "data:image/jpeg;base64,..." strings. These are
      the ones every viewer sees before they add their own; the first is the portrait
@@ -533,8 +573,7 @@
   var frenzy = {mult:1, until:0}, clickFrenzy = {mult:1, until:0};
   var prefs = {ink:true, sound:true};
   var player = null;                       // {id, name} for this browser
-  var scores = null, myRow = null, unsub = null;   // shared leaderboard
-  var writing = false, lastWriteAt = 0, lastWritten = -1, localShown = null;
+  var board = [], boardShown = null;
   var $ = function(id){return document.getElementById(id)};
 
   function store(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v); return true; }catch(e){ return false; } }
@@ -569,7 +608,7 @@
     $("gateTitle").textContent = rename ? "Change your name" : "Who's playing?";
     $("gateBody").textContent = rename
       ? "This is the name on the leaderboard. Changing it renames your existing score."
-      : "Your name goes on the leaderboard, so everyone can see who has made the most James.";
+      : "Your name goes on the leaderboard. When you want to be ranked, copy your score code and send it to whoever keeps the board.";
     $("gateGo").textContent = rename ? "Save name" : "Start clicking";
     $("nameInput").value = rename && player ? player.name : "";
     $("gateErr").hidden = true;
@@ -592,115 +631,162 @@
     savePlayer();
     $("gate").hidden = true;
     $("renameBtn").hidden = false;
-    renderBoard(null);
-    if(rename) pushScore(true); else connectScores();
+    if(rename){
+      // carry the new name onto the row already on this board
+      for(var i=0;i<board.length;i++){ if(board[i].id === player.id) board[i].name = player.name; }
+    }
+    syncSelf(); saveBoard(); renderBoard();
     toast(rename ? "Name changed" : "Welcome, " + name, rename
       ? "The leaderboard now shows " + name + "."
       : "Every James you make counts toward the leaderboard.");
   }
 
-  /* ---------------- shared leaderboard ---------------- */
+  /* ---------------- leaderboard ----------------
+     No shared server here: a page that declares the db capability cannot be
+     shared publicly, and this one is meant to go to anyone with the link. So
+     each player's score travels as a short code they hand over, and every
+     browser keeps the board it has been given. Scores are self-reported.   */
+  function loadBoard(){
+    var raw = store(BOARD_KEY);
+    if(raw){ try{ var b = JSON.parse(raw); if(b && b.length) board = b }catch(e){} }
+  }
+  function saveBoard(){ store(BOARD_KEY, JSON.stringify(board.slice(0,50))); }
+
+  function upsert(entry){
+    if(!entry || !entry.id) return false;
+    for(var i=0;i<board.length;i++){
+      if(board[i].id === entry.id){
+        // a code older than what we already have should not walk the score back
+        if(entry.total < board[i].total && entry.at <= board[i].at) return false;
+        board[i] = entry;
+        return true;
+      }
+    }
+    board.push(entry);
+    return true;
+  }
+  function selfEntry(){
+    return {id:player.id, name:player.name, total:Math.floor(s.total),
+            clicks:s.clicks, assets:owned(), at:Date.now()};
+  }
+  function syncSelf(){
+    if(!player) return;
+    upsert(selfEntry());
+  }
+
+  function b64encode(str){
+    var bytes = new TextEncoder().encode(str), bin = "";
+    for(var i=0;i<bytes.length;i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+  }
+  function b64decode(b64){
+    b64 = b64.replace(/-/g,"+").replace(/_/g,"/");
+    while(b64.length % 4) b64 += "=";
+    var bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for(var i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+  function encodeScore(){
+    if(!player) return "";
+    var e = selfEntry();
+    return "JC1-" + b64encode(JSON.stringify({v:1,i:e.id,n:e.name,t:e.total,c:e.clicks,a:e.assets,d:e.at}));
+  }
+  // a pasted code is someone else's text: parse defensively, keep nothing on trust
+  function decodeScore(text){
+    var m = String(text||"").match(/JC1-([A-Za-z0-9\-_]+)/);
+    if(!m) return null;
+    try{
+      var o = JSON.parse(b64decode(m[1]));
+      if(!o || typeof o.t !== "number" || !isFinite(o.t) || !o.i) return null;
+      var name = cleanName(o.n);
+      return {
+        id: String(o.i).replace(/[^A-Za-z0-9_\-]/g,"").slice(0,40),
+        name: name || "Someone",
+        total: Math.max(0, Math.floor(o.t)),
+        clicks: Math.max(0, Math.floor(Number(o.c) || 0)),
+        assets: Math.max(0, Math.floor(Number(o.a) || 0)),
+        at: Number(o.d) || Date.now()
+      };
+    }catch(e){ return null; }
+  }
+
   function boardNote(msg){
     var el = $("boardNote");
     el.textContent = msg || "";
     el.hidden = !msg;
   }
-  function renderBoard(rows){
+  function renderBoard(){
     var ol = $("board");
     ol.innerHTML = "";
-    if(!rows){
-      // no shared list yet: show this player alone so the panel is never blank
-      rows = player ? [{id:player.id, name:player.name, total:s.total}] : [];
-    }
-    if(!rows.length){ boardNote("No scores yet. Be the first."); return; }
+    if(!player){ boardNote(""); return; }
+    syncSelf();
+    var rows = board.slice().sort(function(a,b){ return (b.total||0) - (a.total||0) });
     rows.forEach(function(r, i){
       var li = document.createElement("li");
-      li.className = "row" + (player && r.id === player.id ? " me" : "") + (i===0 ? " top" : "");
+      var mine = r.id === player.id;
+      li.className = "row" + (mine ? " me" : "") + (i===0 ? " top" : "");
       var rank = document.createElement("span");
       rank.className = "rank"; rank.textContent = (i+1);
       var who = document.createElement("span");
-      who.className = "who"; who.textContent = cleanName(r.name) || "Someone";
+      who.className = "who"; who.textContent = r.name || "Someone";
       var sc = document.createElement("span");
       sc.className = "score"; sc.textContent = fmt(Number(r.total) || 0);
       li.appendChild(rank); li.appendChild(who); li.appendChild(sc);
+      if(!mine){
+        var x = document.createElement("button");
+        x.type = "button"; x.className = "drop-row"; x.textContent = "×";
+        x.title = "Remove " + (r.name || "this score");
+        x.setAttribute("aria-label", "Remove " + (r.name || "this score"));
+        x.onclick = (function(id){ return function(){
+          board = board.filter(function(e){ return e.id !== id });
+          saveBoard(); renderBoard();
+        }})(r.id);
+        li.appendChild(x);
+      }
       ol.appendChild(li);
     });
+    boardNote(rows.length > 1
+      ? rows.length + " players, ranked by all-time Jameses."
+      : "Send friends the link, then paste the code they send back.");
+    boardShown = fmt(s.total) + "|" + rows.length;
   }
-  function connectScores(){
-    if(!player || scores) return;
-    if(!(window.claude && typeof window.claude.use === "function")){
-      boardNote("Shared scores only work on the published link. This copy keeps your score to itself.");
-      renderBoard(null);
+
+  function showCode(){
+    var code = encodeScore();
+    if(!code) return;
+    var box = $("codeBox"), field = $("codeField");
+    box.hidden = false;
+    field.value = code;
+    field.focus(); field.select();
+    $("pasteForm").hidden = true;
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(code).then(function(){
+        toast("Score copied", "Send that code to whoever keeps the board.");
+      }, function(){
+        toast("Copy the code", "It is selected — copy it and send it over.");
+      });
+    } else {
+      toast("Copy the code", "It is selected — copy it and send it over.");
+    }
+  }
+  function addPasted(e){
+    if(e) e.preventDefault();
+    var entry = decodeScore($("pasteInput").value);
+    if(!entry){
+      boardNote("That does not look like a score code. It starts with JC1- .");
       return;
     }
-    boardNote("Connecting to the shared leaderboard\u2026");
-    renderBoard(null);
-    window.claude.use("db").then(function(db){
-      if(!db){
-        boardNote("Shared scores are not available here. Your score stays on this device.");
-        return;
-      }
-      scores = db.collection("scores");
-      myRow = scores.doc(player.id);
-      subscribeBoard();
-      pushScore(true);
-    }, function(){
-      boardNote("Shared scores are not available here. Your score stays on this device.");
-    });
-  }
-  function subscribeBoard(){
-    if(!scores || unsub) return;
-    try{
-      unsub = scores.orderBy("total","desc").limit(10).onSnapshot(function(snap){
-        var rows = snap.docs.map(function(d){
-          var v = d.data() || {};
-          return {id: d.id, name: v.name, total: v.total};
-        });
-        renderBoard(rows);
-        boardNote(rows.length > 1
-          ? rows.length + " players. Rank is by all-time Jameses."
-          : "Rank is by all-time Jameses. Send the link to more friends.");
-      }, function(err){
-        unsub = null;
-        boardNote(err && err.code === "revoked"
-          ? "Scores stopped syncing. Your own progress is safe."
-          : "Scores are not syncing right now. Your own progress is safe.");
-      });
-    }catch(e){
-      boardNote("Scores are not syncing right now. Your own progress is safe.");
+    if(entry.id === player.id){
+      boardNote("That is your own code — your score is already on the board.");
+      return;
     }
-  }
-  // one write at a time, and only when the number actually moved
-  function pushScore(force){
-    if(!myRow || !player || writing) return;
-    var now = Date.now();
-    if(!force){
-      if(now - lastWriteAt < 20000) return;
-      if(lastWritten >= 0 && s.total < lastWritten + 1) return;
-      if(lastWritten > 0 && s.total < lastWritten * 1.005) return;
-    }
-    writing = true; lastWriteAt = now;
-    var mine = Math.floor(s.total);
-    myRow.set({
-      name: player.name,
-      total: mine,
-      jps: Math.round(jps()*10)/10,
-      clicks: s.clicks,
-      assets: owned(),
-      achievements: s.ach.length,
-      updated: new Date().toISOString()
-    }).then(function(){
-      lastWritten = mine;
-    }, function(err){
-      var code = err && err.code;
-      if(code === "revoked" || code === "not_granted" || code === "capability_disabled" || code === "capability_removed"){
-        myRow = null;
-        boardNote("Scores stopped syncing. Your own progress is safe.");
-      } else if(code === "quota_exceeded"){
-        myRow = null;
-        boardNote("The leaderboard is full, so new scores cannot be added.");
-      }
-    }).then(function(){ writing = false; });
+    var added = upsert(entry);
+    saveBoard(); renderBoard();
+    $("pasteInput").value = "";
+    $("pasteForm").hidden = true;
+    toast(added ? "Score added" : "Already current",
+      added ? entry.name + " is on the board with " + fmt(entry.total) + "."
+            : entry.name + " was already on the board with a better run.");
   }
 
   /* ---------------- numbers ---------------- */
@@ -1108,9 +1194,9 @@
       var e = document.createElement("span"); e.className="buff"; e.textContent=t; bb.appendChild(e);
     });
     renderShop();
-    if(player && !myRow){
-      var own = fmt(s.total);
-      if(own !== localShown){ localShown = own; renderBoard(null); }
+    if(player){
+      var key = fmt(s.total) + "|" + board.length;
+      if(key !== boardShown) renderBoard();
     }
   }
 
@@ -1155,13 +1241,20 @@
 
     $("gateForm").addEventListener("submit", submitGate);
     $("renameBtn").addEventListener("click", function(){ openGate(true) });
+    loadBoard();
+    $("copyScore").addEventListener("click", showCode);
+    $("addScore").addEventListener("click", function(){
+      var pf = $("pasteForm");
+      pf.hidden = !pf.hidden;
+      $("codeBox").hidden = true;
+      if(!pf.hidden) $("pasteInput").focus();
+    });
+    $("pasteForm").addEventListener("submit", addPasted);
     if(loadPlayer()){
       $("renameBtn").hidden = false;
-      renderBoard(null);
-      connectScores();
+      renderBoard();
     } else {
       $("renameBtn").hidden = true;
-      renderBoard(null);
       openGate(false);
     }
 
@@ -1198,7 +1291,7 @@
       Object.keys(upEls).forEach(function(id){ upEls[id].remove(); delete upEls[id] });
       document.querySelectorAll(".badge").forEach(function(d){ d.className="badge locked"; d.textContent="?" });
       recalc(); save(); render();
-      lastWritten = -1; pushScore(true);
+      syncSelf(); saveBoard(); renderBoard();
       toast("Back to zero", "One James. No assets. Good luck.");
     });
 
@@ -1216,11 +1309,10 @@
       if(now > nextGolden && !goldenEl){ spawnGolden(); }
       checkAch();
       render();
-      pushScore(false);
     }, 200);
 
     setInterval(save, 10000);
-    window.addEventListener("beforeunload", save);
+    window.addEventListener("beforeunload", function(){ save(); if(player){ syncSelf(); saveBoard(); } });
     window.addEventListener("pagehide", save);
 
     render();
