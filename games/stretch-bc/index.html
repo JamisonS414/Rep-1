@@ -210,6 +210,76 @@
   button:active{transform:translateY(4px);box-shadow:0 0 0 #b58f3e}
   button:focus-visible{outline:3px solid var(--mint);outline-offset:3px}
 
+  /* --- face controls --- */
+  .footbar{
+    display:flex;
+    align-items:center;
+    gap:10px 16px;
+    flex-wrap:wrap;
+    justify-content:center;
+  }
+  .facectl{display:flex;align-items:center;gap:8px}
+  .chip{
+    width:30px;height:30px;
+    border-radius:50%;
+    object-fit:cover;
+    flex:none;
+    box-shadow:0 0 0 2px var(--butter);
+  }
+  .foothelp{
+    flex:1 1 20rem;
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    min-width:0;
+  }
+  button.ghost{
+    font-family:"Barlow",system-ui,sans-serif;
+    font-weight:600;
+    font-size:13px;
+    letter-spacing:.04em;
+    background:transparent;
+    color:var(--cream);
+    border:1px solid rgba(247,230,196,.38);
+    border-radius:3px;
+    padding:7px 14px;
+    box-shadow:none;
+  }
+  button.ghost:hover{background:rgba(247,230,196,.10);transform:none;box-shadow:none}
+  button.ghost:active{transform:translateY(1px);box-shadow:none}
+  button.ghost.quiet{color:var(--cream-dim);border-color:rgba(247,230,196,.18)}
+  .quiet{color:var(--cream-dim)}
+  .stage.dropping::after{
+    content:"";
+    position:absolute;inset:8px;
+    border:2px dashed var(--butter);
+    border-radius:4px;
+    pointer-events:none;
+  }
+
+  /* --- face cropper --- */
+  .ov.crop{
+    place-items:center;
+    align-content:center;
+    background:rgba(8,20,26,.985);
+    overflow:auto;
+  }
+  #cropCanvas{
+    width:224px;
+    max-width:100%;
+    height:auto;
+    border-radius:50%;
+    touch-action:none;
+    cursor:grab;
+    background:rgba(0,0,0,.35);
+  }
+  #cropCanvas:active{cursor:grabbing}
+  #cropCanvas:focus-visible{outline:3px solid var(--mint);outline-offset:4px}
+  .zoomrow{display:flex;align-items:center;gap:10px;width:min(224px,100%)}
+  .zoomrow .lbl{color:var(--cream-dim);flex:none}
+  #cropZoom{flex:1;accent-color:var(--butter);min-width:0}
+  .btnrow{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+
   .help{
     margin:0;
     text-align:center;
@@ -260,13 +330,41 @@
       <div class="card">
         <h2 id="ovTitle">BC is ready to be stretched</h2>
         <p id="ovBody">His shoes are glued to the boardwalk. Drag his head to snag candy — but the farther you pull, the faster his strain meter fills. Ease off before it tops out or BC snaps.</p>
-        <p class="fine" id="ovFine">Grabbing candy while the meter is in the red doubles the points.</p>
+        <p class="fine" id="ovFine">Grabbing candy while the meter is in the red doubles the points. Give BC a real face with the button under the stage.</p>
         <button id="ovBtn">Start pulling</button>
+      </div>
+    </div>
+
+    <div class="ov crop" id="crop" hidden>
+      <div class="card">
+        <h2>Frame BC's face</h2>
+        <canvas id="cropCanvas" width="224" height="224" tabindex="0"
+                aria-label="Face preview. Drag, or use the arrow keys, to move the picture."></canvas>
+        <label class="zoomrow" for="cropZoom">
+          <span class="lbl">Zoom</span>
+          <input type="range" id="cropZoom" min="1" max="3" step="0.01" value="1">
+        </label>
+        <p class="fine" id="cropHint">Drag to move, slide to zoom.</p>
+        <div class="btnrow">
+          <button type="button" id="cropUse">Use this face</button>
+          <button type="button" id="cropCancel" class="ghost">Cancel</button>
+        </div>
       </div>
     </div>
   </div>
 
-  <p class="help">Drag BC with mouse or finger &mdash; or steer with <kbd>&larr;</kbd><kbd>&uarr;</kbd><kbd>&darr;</kbd><kbd>&rarr;</kbd>. Let go and he relaxes. <kbd>Space</kbd> starts a round.</p>
+  <div class="footbar">
+    <div class="facectl">
+      <img id="faceChip" class="chip" alt="BC's current face" hidden>
+      <button type="button" id="faceBtn" class="ghost">Give BC a face</button>
+      <button type="button" id="faceClear" class="ghost quiet" hidden>Remove</button>
+      <input type="file" id="faceFile" accept="image/*" hidden>
+    </div>
+    <div class="foothelp">
+      <p class="help">Drag BC with mouse or finger &mdash; or steer with <kbd>&larr;</kbd><kbd>&uarr;</kbd><kbd>&darr;</kbd><kbd>&rarr;</kbd>. <kbd>Space</kbd> starts a round.</p>
+      <p class="help quiet" id="faceNote">Blank head for now.</p>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -315,7 +413,7 @@
     safeLen = reach * 0.55;
     restLen = Math.min(H * 0.26, safeLen * 0.62);
     baseW   = Math.max(24, Math.min(52, Math.min(W, H) * 0.085));
-    headR   = baseW * 0.64;
+    headR   = baseW * 0.72;
   }
 
   function resize(){
@@ -455,6 +553,7 @@
 
   var ARROWS = { ArrowLeft:[-1,0], ArrowRight:[1,0], ArrowUp:[0,-1], ArrowDown:[0,1] };
   window.addEventListener('keydown', function(e){
+    if (crop && !crop.hidden) return;
     if (e.key === ' ' || e.key === 'Spacebar'){
       if (!G || G.phase !== 'play'){ e.preventDefault(); startGame(); }
       return;
@@ -484,7 +583,7 @@
     // keyboard steering
     var kx = 0, ky = 0;
     for (var k in ARROWS) if (keyHeld[k]){ kx += ARROWS[k][0]; ky += ARROWS[k][1]; }
-    if ((kx || ky) && G.phase === 'play'){
+    if ((kx || ky) && G.phase === 'play' && crop.hidden){
       var n = Math.hypot(kx, ky) || 1;
       ptr.x = clamp(ptr.x + (kx / n) * 620 * dt, 8, W - 8);
       ptr.y = clamp(ptr.y + (ky / n) * 620 * dt, 8, H - 8);
@@ -492,7 +591,7 @@
 
     // where the head wants to be
     var tx, ty;
-    if (G.phase === 'play' && ptr.held){
+    if (G.phase === 'play' && crop.hidden && ptr.held){
       tx = clamp(ptr.x, headR * 0.6, W - headR * 0.6);
       ty = clamp(ptr.y, headR * 0.6, anchor.y - baseW * 0.5);
     } else {
@@ -526,7 +625,7 @@
       p.y += p.vy * dt;
     }
 
-    if (G.phase !== 'play'){ decay(dt); return; }
+    if (G.phase !== 'play' || !crop.hidden){ decay(dt); return; }
 
     // clock
     G.time -= dt;
@@ -792,19 +891,43 @@
     var ang = Math.atan2(b.y - a.y, b.x - a.x) - Math.PI / 2;
     var sp = Math.hypot(head.vx, head.vy);
     var sq = clamp(sp / 2600, 0, 0.26);
-    var r = headR * clamp(thin, 0.62, 1.22);
+    var r = headR * clamp(thin, 0.82, 1.22);
+    var strain = G.tension;
 
     ctx.save();
     ctx.translate(head.x, head.y);
     ctx.rotate(ang);
     ctx.scale(1 - sq, 1 + sq);
+
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fillStyle = C.butter;
     ctx.fill();
+
+    if (faceImg){
+      ctx.save();
+      ctx.clip();
+      ctx.drawImage(faceImg, -r, -r, r * 2, r * 2);
+      ctx.restore();
+    }
+
+    // he reddens as the strain climbs — reads with or without a photo
+    if (strain > 0.40){
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.fillStyle = 'rgba(226,56,63,' + ((strain - 0.40) * 0.62).toFixed(3) + ')';
+      ctx.fillRect(-r, -r, r * 2, r * 2);
+      ctx.restore();
+    }
+
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.lineWidth = 3;
     ctx.strokeStyle = C.edge;
     ctx.stroke();
+
     // tuft
     ctx.strokeStyle = C.edge;
     ctx.lineWidth = Math.max(2, r * 0.13);
@@ -817,39 +940,14 @@
     }
     ctx.restore();
 
-    // face, upright so it always reads
-    var strain = G.tension;
-    var eyeR = r * (strain > 0.75 ? 0.30 : strain > 0.42 ? 0.25 : 0.20);
-    var gx = clamp((ptr.x - head.x) / 90, -1, 1) * eyeR * 0.36;
-    var gy = clamp((ptr.y - head.y) / 90, -1, 1) * eyeR * 0.36;
-    for (var e = -1; e <= 1; e += 2){
-      var ex = head.x + e * r * 0.36, ey = head.y - r * 0.10;
-      ctx.beginPath(); ctx.arc(ex, ey, eyeR, 0, Math.PI * 2);
-      ctx.fillStyle = '#fffaf0'; ctx.fill();
-      ctx.beginPath(); ctx.arc(ex + gx, ey + gy, eyeR * 0.48, 0, Math.PI * 2);
-      ctx.fillStyle = C.ink; ctx.fill();
-    }
-    ctx.strokeStyle = C.ink;
-    ctx.lineWidth = Math.max(1.6, r * 0.10);
-    ctx.lineCap = 'round';
-    var my = head.y + r * 0.38;
-    ctx.beginPath();
-    if (strain > 0.75){
-      ctx.ellipse(head.x, my, r * 0.24, r * 0.30, 0, 0, Math.PI * 2);
-      ctx.fillStyle = '#5c1b2b'; ctx.fill();
-    } else if (strain > 0.42){
-      ctx.moveTo(head.x - r * 0.26, my);
-      ctx.lineTo(head.x + r * 0.26, my);
-      ctx.stroke();
-    } else {
-      ctx.arc(head.x, my - r * 0.14, r * 0.30, 0.20 * Math.PI, 0.80 * Math.PI);
-      ctx.stroke();
-    }
     if (strain > 0.72){
       ctx.fillStyle = '#9fe8ff';
       ctx.beginPath();
-      ctx.arc(head.x + r * 0.78, head.y - r * 0.44 + Math.sin(G.t * 9) * 2, r * 0.15, 0, Math.PI * 2);
+      ctx.arc(head.x + r * 0.82, head.y - r * 0.50 + Math.sin(G.t * 9) * 2, r * 0.15, 0, Math.PI * 2);
       ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(23,11,16,.45)';
+      ctx.stroke();
     }
   }
 
@@ -861,10 +959,12 @@
     ctx.save();
     ctx.translate(s.x, y);
     ctx.rotate(Math.sin(s.rot) * 0.4);
-    ctx.globalAlpha = s.gold ? 0.26 : 0.15;
-    ctx.fillStyle = s.gold ? C.gold : C.pink;
-    ctx.beginPath(); ctx.arc(0, 0, r * (s.gold ? 2.3 : 1.9), 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = 1;
+    if (s.gold){
+      ctx.globalAlpha = 0.26;
+      ctx.fillStyle = C.gold;
+      ctx.beginPath(); ctx.arc(0, 0, r * 2.3, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
     // wrapper twists
     ctx.fillStyle = c2;
     for (var s2 = -1; s2 <= 1; s2 += 2){
@@ -936,6 +1036,177 @@
     ctx.restore();
   }
 
+  // ---- BC's face -----------------------------------------------------
+  var FACE_KEY = 'stretchbc.face';
+  var FACE_PX = 256;
+  var faceImg = null;
+  var faceData = '';
+  var elFaceBtn = document.getElementById('faceBtn');
+  var elFaceClear = document.getElementById('faceClear');
+  var elFaceFile = document.getElementById('faceFile');
+  var elFaceChip = document.getElementById('faceChip');
+  var elFaceNote = document.getElementById('faceNote');
+  var crop = document.getElementById('crop');
+  var cropCvs = document.getElementById('cropCanvas');
+  var cropCtx = cropCvs.getContext('2d');
+  var cropZoom = document.getElementById('cropZoom');
+  var cropUse = document.getElementById('cropUse');
+  var cropCancel = document.getElementById('cropCancel');
+  var cropHint = document.getElementById('cropHint');
+  var CROP_PX = 224;
+
+  function setFace(dataUrl, remember){
+    if (!dataUrl){
+      faceImg = null; faceData = '';
+      elFaceChip.hidden = true;
+      elFaceChip.removeAttribute('src');
+      elFaceClear.hidden = true;
+      elFaceBtn.textContent = 'Give BC a face';
+      elFaceNote.textContent = 'Blank head for now.';
+      if (remember) try { localStorage.removeItem(FACE_KEY); } catch (e) {}
+      return;
+    }
+    var im = new Image();
+    im.onload = function(){
+      faceImg = im;
+      faceData = dataUrl;
+      elFaceChip.src = dataUrl;
+      elFaceChip.hidden = false;
+      elFaceClear.hidden = false;
+      elFaceBtn.textContent = 'Change face';
+      elFaceNote.textContent = 'Saved on this device only.';
+      if (remember) try { localStorage.setItem(FACE_KEY, dataUrl); } catch (e) {
+        elFaceNote.textContent = "This face won't survive a reload — storage is full or blocked.";
+      }
+    };
+    im.onerror = function(){ elFaceNote.textContent = "That file didn't load as an image. Try a JPG or PNG."; };
+    im.src = dataUrl;
+  }
+
+  // --- circular cropper ---
+  var cropState = null;   // {img, zoom, ox, oy, base}
+  function openCrop(img){
+    var base = Math.max(CROP_PX / img.width, CROP_PX / img.height);
+    cropState = { img: img, zoom: 1, ox: 0, oy: 0, base: base };
+    cropZoom.value = '1';
+    crop.hidden = false;
+    paintCrop();
+    cropUse.focus({ preventScroll: true });
+  }
+  function clampPan(){
+    var s2 = cropState.base * cropState.zoom;
+    var mx = Math.max(0, (cropState.img.width * s2 - CROP_PX) / 2);
+    var my = Math.max(0, (cropState.img.height * s2 - CROP_PX) / 2);
+    cropState.ox = clamp(cropState.ox, -mx, mx);
+    cropState.oy = clamp(cropState.oy, -my, my);
+  }
+  function paintFace(c2, S){
+    var k = S / CROP_PX;
+    var s2 = cropState.base * cropState.zoom * k;
+    var w = cropState.img.width * s2, h = cropState.img.height * s2;
+    c2.fillStyle = '#ffd47e';
+    c2.fillRect(0, 0, S, S);
+    c2.drawImage(cropState.img, S / 2 + cropState.ox * k - w / 2, S / 2 + cropState.oy * k - h / 2, w, h);
+  }
+  function paintCrop(){
+    clampPan();
+    cropCtx.setTransform(1, 0, 0, 1, 0, 0);
+    cropCtx.clearRect(0, 0, CROP_PX, CROP_PX);
+    paintFace(cropCtx, CROP_PX);
+    // dim everything outside the circle
+    cropCtx.fillStyle = 'rgba(8,20,26,.78)';
+    cropCtx.beginPath();
+    cropCtx.rect(0, 0, CROP_PX, CROP_PX);
+    cropCtx.arc(CROP_PX / 2, CROP_PX / 2, CROP_PX / 2 - 2, 0, Math.PI * 2);
+    cropCtx.fill('evenodd');
+    cropCtx.beginPath();
+    cropCtx.arc(CROP_PX / 2, CROP_PX / 2, CROP_PX / 2 - 2, 0, Math.PI * 2);
+    cropCtx.lineWidth = 2;
+    cropCtx.strokeStyle = '#ffd47e';
+    cropCtx.stroke();
+  }
+  var cropDrag = null;
+  cropCvs.addEventListener('pointerdown', function(e){
+    if (!cropState) return;
+    cropDrag = { x: e.clientX, y: e.clientY, ox: cropState.ox, oy: cropState.oy };
+    try { cropCvs.setPointerCapture(e.pointerId); } catch (err) {}
+    e.preventDefault();
+  });
+  cropCvs.addEventListener('pointermove', function(e){
+    if (!cropDrag) return;
+    var k = CROP_PX / (cropCvs.getBoundingClientRect().width || CROP_PX);
+    cropState.ox = cropDrag.ox + (e.clientX - cropDrag.x) * k;
+    cropState.oy = cropDrag.oy + (e.clientY - cropDrag.y) * k;
+    paintCrop();
+  });
+  function cropRelease(){ cropDrag = null; }
+  cropCvs.addEventListener('pointerup', cropRelease);
+  cropCvs.addEventListener('pointercancel', cropRelease);
+  cropCvs.addEventListener('keydown', function(e){
+    if (!cropState || !ARROWS[e.key]) return;
+    cropState.ox += ARROWS[e.key][0] * -10;
+    cropState.oy += ARROWS[e.key][1] * -10;
+    paintCrop();
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  cropZoom.addEventListener('input', function(){
+    if (!cropState) return;
+    cropState.zoom = parseFloat(cropZoom.value);
+    paintCrop();
+  });
+  cropCancel.addEventListener('click', function(){
+    crop.hidden = true; cropState = null; elFaceBtn.focus({ preventScroll: true });
+  });
+  cropUse.addEventListener('click', function(){
+    if (!cropState) return;
+    var out = document.createElement('canvas');
+    out.width = out.height = FACE_PX;
+    paintFace(out.getContext('2d'), FACE_PX);
+    var url;
+    try { url = out.toDataURL('image/jpeg', 0.86); }
+    catch (e) { cropHint.textContent = "That image can't be read here. Try one saved from your own device."; return; }
+    crop.hidden = true;
+    cropState = null;
+    setFace(url, true);
+    cvs.focus({ preventScroll: true });
+  });
+
+  function loadFaceFile(file){
+    if (!file || !/^image\//.test(file.type)){
+      elFaceNote.textContent = 'That needs to be an image file.';
+      return;
+    }
+    var fr = new FileReader();
+    fr.onload = function(){
+      var im = new Image();
+      im.onload = function(){ cropHint.textContent = 'Drag to move, slide to zoom.'; openCrop(im); };
+      im.onerror = function(){ elFaceNote.textContent = "That file didn't load as an image."; };
+      im.src = fr.result;
+    };
+    fr.onerror = function(){ elFaceNote.textContent = "Couldn't read that file."; };
+    fr.readAsDataURL(file);
+  }
+
+  elFaceBtn.addEventListener('click', function(){ elFaceFile.click(); });
+  elFaceFile.addEventListener('change', function(){
+    loadFaceFile(elFaceFile.files && elFaceFile.files[0]);
+    elFaceFile.value = '';
+  });
+  elFaceClear.addEventListener('click', function(){ setFace('', true); cvs.focus({ preventScroll: true }); });
+
+  // drop a picture straight onto the stage
+  ['dragenter', 'dragover'].forEach(function(ev){
+    stage.addEventListener(ev, function(e){ e.preventDefault(); stage.classList.add('dropping'); });
+  });
+  ['dragleave', 'drop'].forEach(function(ev){
+    stage.addEventListener(ev, function(e){ e.preventDefault(); stage.classList.remove('dropping'); });
+  });
+  stage.addEventListener('drop', function(e){
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) loadFaceFile(f);
+  });
+
   // ---- HUD -----------------------------------------------------------
   var lastHUD = {};
   function syncHUD(force){
@@ -983,6 +1254,9 @@
     fillSnacks();
     resetBody();
     if (best > 0) ovFine.textContent = 'Your best pull so far: ' + best.toLocaleString() + ' points.';
+    var stored = (saved && saved.face) || '';
+    if (!stored) try { stored = localStorage.getItem(FACE_KEY) || ''; } catch (e) {}
+    setFace(stored, !!(saved && saved.face));
     syncHUD(true);
     requestAnimationFrame(frame);
   }
@@ -991,7 +1265,7 @@
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', function(){ setTimeout(resize, 120); });
 
-  try { window.claude && window.claude.hot && window.claude.hot.snapshot(function(){ return { best: best }; }); } catch (e) {}
+  try { window.claude && window.claude.hot && window.claude.hot.snapshot(function(){ return { best: best, face: faceData }; }); } catch (e) {}
   if (window.claude && window.claude.hot && window.claude.hot.ready){
     window.claude.hot.ready(boot);
   } else {
